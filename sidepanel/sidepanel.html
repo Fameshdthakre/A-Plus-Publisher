@@ -18,10 +18,10 @@
         </header>
 
         <nav class="tabs">
-            <button class="tab-btn active" data-target="tab-publisher">Publisher</button>
-            <button class="tab-btn" data-target="tab-generator">AI Generator</button>
-            <button class="tab-btn" data-target="tab-history">History</button>
-            <button class="tab-btn" data-target="tab-settings">Settings</button>
+            <button class="tab-btn active" data-target="tab-publisher">📋 Publisher</button>
+            <button class="tab-btn" data-target="tab-generator">🧠 AI Generator</button>
+            <button class="tab-btn" data-target="tab-history">📜 History</button>
+            <button class="tab-btn" data-target="tab-settings">⚙ Settings</button>
         </nav>
 
         <main>
@@ -39,7 +39,7 @@
 
                 <section class="card dropzone-card" id="dropzone">
                     <div class="dropzone-content">
-                        <div class="icon">📁</div>
+                        <div class="icon icon-pulse">📁</div>
                         <h3>Drop Excel File</h3>
                         <p>Drag & drop your .xlsx here</p>
                         <input type="file" id="fileInput" accept=".xlsx, .xls" hidden>
@@ -129,7 +129,7 @@
 
                         <div class="dropzone-card" id="aiDropzone">
                             <div class="dropzone-content">
-                                <div class="icon">📊</div>
+                                <div class="icon icon-pulse">📊</div>
                                 <h3>Drop Product Data Excel</h3>
                                 <p>Select file to map columns</p>
                                 <input type="file" id="aiFileInput" accept=".xlsx, .xls" hidden>
@@ -153,6 +153,9 @@
                                     <option value="technical">Technical Focus (Detailed Specs)</option>
                                     <option value="usability">Usability & Lifestyle (Comfort & Daily Use)</option>
                                 </select>
+                            </div>
+                            <div id="aiStrategyInfoCard" class="strategy-info-card">
+                                <!-- Populated dynamically by JS -->
                             </div>
                             <div class="section-header-row mt-05">
                                 <span class="section-label">Map Columns</span>
@@ -198,6 +201,9 @@
                             </div>
                             <button id="generateChartBtn" class="btn-primary mt-1">Analyze
                                 Opportunities</button>
+                            <div id="aiProgressContainer" class="ai-progress-container hidden">
+                                <div class="step-text" id="aiProgressText">Analyzing product data...</div>
+                            </div>
                             <div class="flex-center-gap mt-05">
                                 <button id="importOppBtn" class="btn-secondary btn-full" type="button">📥 Import Saved
                                     Groups (.json)</button>
@@ -213,7 +219,9 @@
                                 <span id="aiOppText" class="font-semibold">Found opportunities!</span>
                             </div>
                             <div class="flex-center-gap" style="margin-bottom: 1rem;">
-                                <button id="exportOppBtn" class="btn-secondary btn-full" type="button">📤 Export Groups
+                                <button id="aiToggleSelectAllBtn" class="btn-text" type="button">☑ Select All</button>
+                                <div style="flex: 1;"></div>
+                                <button id="exportOppBtn" class="btn-secondary" type="button">📤 Export Groups
                                     JSON</button>
                             </div>
                             <div id="aiOppList" class="ai-opp-list">
@@ -243,7 +251,7 @@
                 <div id="historyList" class="history-list">
                     <!-- Populated by renderHistory() in sidepanel.js -->
                     <div class="history-empty" id="historyEmpty">
-                        <div class="history-empty-icon">📄</div>
+                        <div class="history-empty-icon icon-pulse">📄</div>
                         <p>No history yet.</p>
                         <p class="history-empty-sub">AI generations, automation runs, and imports will appear here.</p>
                     </div>

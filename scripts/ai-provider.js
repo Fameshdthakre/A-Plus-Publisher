@@ -102,7 +102,8 @@ export const AIProvider = {
 
         const body = {
             model: model,
-            max_tokens: options.max_tokens || 1024,
+            max_tokens: options.max_tokens || 4096,
+            system: "You are a structured data generator. You MUST respond with ONLY a valid JSON object. No introductory text, no explanations, no markdown formatting — just the raw JSON object.",
             messages: [{ role: "user", content: prompt }]
         };
 
@@ -129,6 +130,7 @@ export const AIProvider = {
 
         let options = {};
         const asinProperties = {};
+        const shortTitleProperties = {};
         const requiredAsins = [];
         if (Array.isArray(productData)) {
             productData.forEach(p => {
@@ -136,7 +138,11 @@ export const AIProvider = {
                     const asinStr = String(p.ASIN).trim();
                     asinProperties[asinStr] = {
                         type: "string",
-                        description: `Value of the comparison metric for ASIN ${asinStr}`
+                        description: `Value of the comparison metric for ASIN ${asinStr}. Max 25 chars.`
+                    };
+                    shortTitleProperties[asinStr] = {
+                        type: "string",
+                        description: `Concise product title for ASIN ${asinStr}. Max 75 chars.`
                     };
                     requiredAsins.push(asinStr);
                 }
@@ -152,21 +158,28 @@ export const AIProvider = {
                         items: {
                             type: "object",
                             properties: {
-                                metricName: { type: "string", description: "The name of the comparison metric (e.g., 'Dimensions', 'Material')" },
+                                metricName: { type: "string", description: "The name of the comparison metric. Max 30 chars, title-case." },
                                 values: {
                                     type: "object",
                                     properties: asinProperties,
                                     required: requiredAsins,
                                     additionalProperties: false,
-                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text."
+                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 25 chars)."
                                 }
                             },
                             required: ["metricName", "values"],
                             additionalProperties: false
                         }
+                    },
+                    shortTitles: {
+                        type: "object",
+                        properties: shortTitleProperties,
+                        required: requiredAsins,
+                        additionalProperties: false,
+                        description: "A mapping from ASIN to a concise product title (max 75 chars). Strip SEO filler and brand repetition."
                     }
                 },
-                required: ["metrics"],
+                required: ["metrics", "shortTitles"],
                 additionalProperties: false
             };
             options.response_format = { type: "json_schema", json_schema: { name: "chart_generation", strict: true, schema: schema } };
@@ -179,25 +192,37 @@ export const AIProvider = {
                         items: {
                             type: "object",
                             properties: {
-                                metricName: { type: "string", description: "The name of the comparison metric (e.g., 'Dimensions', 'Material')" },
+                                metricName: { type: "string", description: "The name of the comparison metric. Max 30 chars, title-case." },
                                 values: {
                                     type: "object",
                                     properties: asinProperties,
                                     required: requiredAsins,
-                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text."
+                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 25 chars)."
                                 }
                             },
                             required: ["metricName", "values"]
                         }
+                    },
+                    shortTitles: {
+                        type: "object",
+                        properties: shortTitleProperties,
+                        required: requiredAsins,
+                        description: "A mapping from ASIN to a concise product title (max 75 chars). Strip SEO filler and brand repetition."
                     }
                 },
-                required: ["metrics"]
+                required: ["metrics", "shortTitles"]
             };
             options.responseSchema = schema;
         }
 
         const result = await this.fetchAI(settings, prompt, options);
-        return this.parseJSON(result, "metrics");
+        const parsed = this.parseJSON(result);
+
+        // Return both metrics and shortTitles
+        return {
+            metrics: parsed.metrics || parsed,
+            shortTitles: parsed.shortTitles || {}
+        };
     },
 
     async identifyOpportunities(products, settings) {

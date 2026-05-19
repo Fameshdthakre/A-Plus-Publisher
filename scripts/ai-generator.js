@@ -159,6 +159,23 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     category: document.getElementById("mapCategory"),
   };
 
+  const STRATEGY_DESCRIPTIONS = {
+    balanced: "<strong>Balanced CRO (Standard)</strong><br>A structured mix of Hero highlights, checkmarks (10:6), and clean metrics. Best for general products.",
+    premium: "<strong>Premium Justification</strong><br>Focuses on quality, materials, and high-end aesthetics. Uses more descriptive checkmarks (10:7) to convey value.",
+    technical: "<strong>Technical Focus</strong><br>Emphasizes precise specifications, dimensions, and raw performance data. Checkmarks are used sparingly (10:4).",
+    usability: "<strong>Usability & Lifestyle</strong><br>Translates specs into daily benefits (e.g., 'Lasts All Day'). Balanced checkmarks (10:6) focusing on user experience."
+  };
+
+  const strategySelect = document.getElementById("aiStrategySelect");
+  const strategyInfoCard = document.getElementById("aiStrategyInfoCard");
+  if (strategySelect && strategyInfoCard) {
+    const updateStrategyCard = () => {
+      strategyInfoCard.innerHTML = STRATEGY_DESCRIPTIONS[strategySelect.value] || STRATEGY_DESCRIPTIONS.balanced;
+    };
+    strategySelect.addEventListener("change", updateStrategyCard);
+    updateStrategyCard(); // Initialize
+  }
+
   function showAIError(message) {
     const errorDiv = document.getElementById("aiErrorDiv");
     const errorText = document.getElementById("aiErrorText");
@@ -610,6 +627,10 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     const oppList = document.getElementById("aiOppList");
     const oppText = document.getElementById("aiOppText");
 
+    const allProducts = parseAllProducts() || [];
+    const productMap = {};
+    allProducts.forEach((p) => (productMap[p.ASIN] = p));
+
     if (opportunitiesUI && mappingUIDiv && oppList) {
       mappingUIDiv.classList.add("hidden");
       opportunitiesUI.classList.remove("hidden");
@@ -629,14 +650,14 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       } else {
         opps.forEach((opp, idx) => {
           const card = document.createElement("div");
-          card.className = "opp-group-card";
+          card.className = "opp-group-card" + (idx < 10 ? " selected" : "");
 
           const header = document.createElement("div");
           header.className = "opp-group-header";
 
           const title = document.createElement("div");
           title.className = "opp-group-title";
-          title.textContent = opp.groupName;
+          title.innerHTML = `${opp.groupName} <span class="opp-asin-count-badge">${opp.asins.length} ASINs</span>`;
 
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
@@ -656,6 +677,10 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
             const chip = document.createElement("span");
             chip.className = "opp-asin-chip";
             chip.textContent = asin;
+            const productTitle = productMap[asin]?.Title || "";
+            if (productTitle) {
+              chip.title = productTitle;
+            }
             asinList.appendChild(chip);
           });
 
@@ -666,6 +691,8 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       // Wire Proceed Button
       const proceedBtn = document.getElementById("proceedGenerateBtn");
+      const toggleAllBtn = document.getElementById("aiToggleSelectAllBtn");
+
       if (proceedBtn) {
         const updateProceedState = () => {
           const checkboxes = oppList.querySelectorAll(
@@ -677,22 +704,55 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
           proceedBtn.style.opacity = selected.length === 0 ? "0.5" : "1";
           proceedBtn.style.cursor =
             selected.length === 0 ? "not-allowed" : "pointer";
+          proceedBtn.textContent = selected.length > 0 ? `Generate ${selected.length} Charts →` : "Proceed to Generate Charts";
 
           // Limit selection to maximum 10 charts
           const isMaxReached = selected.length >= 10;
           checkboxes.forEach((cb) => {
             const cardEl = cb.closest(".opp-group-card");
-            if (!cb.checked) {
-              cb.disabled = isMaxReached;
-              if (cardEl) cardEl.style.opacity = isMaxReached ? "0.5" : "1";
-            } else {
-              cb.disabled = false;
-              if (cardEl) cardEl.style.opacity = "1";
+            if (cardEl) {
+              cardEl.classList.toggle("selected", cb.checked);
+              if (!cb.checked) {
+                cb.disabled = isMaxReached;
+                cardEl.classList.toggle("max-reached", isMaxReached);
+              } else {
+                cb.disabled = false;
+                cardEl.classList.remove("max-reached");
+              }
             }
           });
+
+          if (toggleAllBtn) {
+            const allSelected = Array.from(checkboxes).every(cb => cb.checked || cb.disabled);
+            toggleAllBtn.textContent = allSelected && selected.length > 0 ? "☐ Deselect All" : "☑ Select All";
+          }
         };
 
         oppList.addEventListener("change", updateProceedState);
+        
+        if (toggleAllBtn) {
+          toggleAllBtn.onclick = () => {
+            const checkboxes = Array.from(oppList.querySelectorAll('input[type="checkbox"]'));
+            const currentlySelected = checkboxes.filter(cb => cb.checked).length;
+            const willSelectAll = currentlySelected < 10 && currentlySelected < checkboxes.length;
+            
+            let selectedCount = 0;
+            checkboxes.forEach(cb => {
+              if (willSelectAll) {
+                if (selectedCount < 10) {
+                  cb.checked = true;
+                  selectedCount++;
+                } else {
+                  cb.checked = false;
+                }
+              } else {
+                cb.checked = false;
+              }
+            });
+            updateProceedState();
+          };
+        }
+
         updateProceedState(); // Run once to set initial state
 
         proceedBtn.onclick = async () => {
@@ -729,7 +789,10 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
           }
 
           proceedBtn.disabled = true;
-          proceedBtn.textContent = "Generating Charts...";
+          const progressContainer = document.getElementById("aiProgressContainer");
+          const progressText = document.getElementById("aiProgressText");
+          if (progressContainer) progressContainer.classList.remove("hidden");
+          if (progressText) progressText.textContent = `Generating ${selectedGroups.length} charts...`;
           hideAIError();
 
           try {
@@ -758,7 +821,8 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
             showAIError(err.message);
           } finally {
             proceedBtn.disabled = false;
-            proceedBtn.textContent = "Proceed to Generate Charts";
+            proceedBtn.textContent = `Generate ${selectedGroups.length} Charts →`;
+            if (progressContainer) progressContainer.classList.add("hidden");
           }
         };
       }
@@ -856,6 +920,11 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       generateBtn.textContent = "Analyzing Opportunities...";
       hideAIError();
 
+      const progressContainer = document.getElementById("aiProgressContainer");
+      const progressText = document.getElementById("aiProgressText");
+      if (progressContainer) progressContainer.classList.remove("hidden");
+      if (progressText) progressText.textContent = "Step 1: Reading spreadsheet data...";
+
       try {
         const result = await new Promise((resolve) => {
           chrome.storage.local.get(["aiSettings"], (res) => resolve(res));
@@ -874,6 +943,9 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
             Categories: p.Category || "",
           }))
           .slice(0, 50); // Cap at 50 ASINs for opportunities analysis
+          
+        if (progressText) progressText.textContent = "Step 2: Analyzing product groupings via AI...";
+        
         const opportunities = await AIProvider.identifyOpportunities(
           opportunitiesData,
           settings,
@@ -887,6 +959,7 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       } finally {
         generateBtn.disabled = false;
         generateBtn.textContent = originalText;
+        if (progressContainer) progressContainer.classList.add("hidden");
       }
     });
   }
@@ -905,9 +978,10 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
     const validChunks = groups
       .map((g) => {
-        return g.asins.map((asin) => productMap[asin]).filter(Boolean);
+        const products = g.asins.map((asin) => productMap[asin]).filter(Boolean);
+        return { group: g, products };
       })
-      .filter((chunk) => chunk.length >= 2)
+      .filter((entry) => entry.products.length >= 2)
       .slice(0, 10);
 
     if (validChunks.length === 0) {
@@ -915,15 +989,24 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     }
 
     const settledResults = await Promise.allSettled(
-      validChunks.map(async (chunk) => {
-        const metricsArray = await AIProvider.generateChart(
+      validChunks.map(async (entry) => {
+        const { group, products: chunk } = entry;
+        const chartResult = await AIProvider.generateChart(
           chunk,
           settings,
           strategy,
         );
 
+        // generateChart now returns { metrics, shortTitles }
+        const metricsArray = Array.isArray(chartResult) ? chartResult : (chartResult.metrics || []);
+        const shortTitles = (chartResult && !Array.isArray(chartResult)) ? (chartResult.shortTitles || {}) : {};
+
         const asinsList = chunk.map((p) => p.ASIN);
-        const titlesList = chunk.map((p) => p.Title);
+        // Use AI-generated short titles with Excel titles as fallback
+        const titlesList = chunk.map((p) => {
+          const aiTitle = shortTitles[p.ASIN];
+          return (aiTitle && aiTitle.trim()) ? aiTitle.trim() : p.Title;
+        });
 
         const baseAsin = asinsList[0];
         const sheetName =
@@ -933,7 +1016,7 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
         return {
           name: sheetName,
-          contentTitle: `AI Comp - ${baseAsin}`,
+          contentTitle: group.groupName || `AI Comp - ${baseAsin}`,
           draftUrl: "",
           previewUrl: "",
           asins: asinsList,
