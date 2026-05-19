@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A-Plus Publisher</title>
+    <link rel="stylesheet" href="sidepanel.css">
+    <!-- Local SheetJS for Excel Parsing (CSP Compliant) -->
+    <script src="../libs/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>A+ Publisher</h1>
+            <p class="subtitle">Comparison Chart Pro</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-target="tab-publisher">Publisher</button>
+            <button class="tab-btn" data-target="tab-generator">AI Generator</button>
+            <button class="tab-btn" data-target="tab-history">History</button>
+            <button class="tab-btn" data-target="tab-settings">Settings</button>
+        </nav>
+
+        <main>
+            <div id="tab-publisher" class="tab-content active">
+                <section class="card resume-card hidden" id="resumeCard">
+                    <div class="card-header">
+                        <h3>Pending Automation</h3>
+                    </div>
+                    <div class="card-content">
+                        <p id="resumeText">You have unfinished charts in the queue.</p>
+                        <button id="resumeBtn" class="btn-primary btn-full">Resume Automation</button>
+                        <button id="discardQueueBtn" class="btn-text btn-full-width-spaced">Discard Queue</button>
+                    </div>
+                </section>
+
+                <section class="card dropzone-card" id="dropzone">
+                    <div class="dropzone-content">
+                        <div class="icon">📁</div>
+                        <h3>Drop Excel File</h3>
+                        <p>Drag & drop your .xlsx here</p>
+                        <input type="file" id="fileInput" accept=".xlsx, .xls" hidden>
+                    </div>
+                    <div class="card-footer">
+                        <button id="downloadTemplate" class="btn-secondary btn-full">Download Template (.xlsx)</button>
+                    </div>
+                </section>
+
+                <!-- Robust Data Preview (accordion per chart) -->
+                <section class="hidden" id="dataPreview">
+                    <div class="preview-toolbar">
+                        <h3>Data Preview</h3>
+                        <div class="flex-center-gap">
+                            <span class="chart-count-badge" id="chartCountBadge">0 charts</span>
+                            <button class="btn-text" id="downloadAllChartsBtn" style="display:none;"
+                                title="Download all charts as a single Excel file with one tab per chart">📦 Download
+                                All (.xlsx)</button>
+                            <button class="btn-text" id="toggleAllCharts">☑ Select All</button>
+                            <button class="btn-text" id="clearData">✕ Clear</button>
+                        </div>
+                    </div>
+                    <div class="preview-container" id="previewContainer">
+                        <!-- Accordion chart cards rendered here by JS -->
+                    </div>
+                </section>
+
+                <section class="card validation-card hidden" id="validationCard">
+                    <div class="card-header">
+                        <h3>⚠ Validation Issues</h3>
+                    </div>
+                    <ul class="validation-list" id="validationList"></ul>
+                </section>
+
+                <section class="card results-card hidden" id="resultsCard">
+                    <div class="card-header">
+                        <h3>🎉 Processing Complete</h3>
+                    </div>
+                    <div class="card-content">
+                        <div id="resultsList" class="results-list-container"></div>
+                        <div class="btn-group">
+                            <button id="bulkOpenBtn" class="btn-primary">Bulk Open Previews</button>
+                            <button id="downloadCsvBtn" class="btn-secondary">Download CSV</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="action-panel">
+                    <div class="btn-group">
+                        <button id="startBtn" class="btn-primary" disabled>Start Automation</button>
+                        <button id="stopBtn" class="btn-primary hidden">Stop Automation</button>
+                    </div>
+                    <div id="statusContainer" class="status-container hidden">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p id="statusText">Ready to start...</p>
+                        <div id="logContainer" class="log-container">
+                            <ul id="logList" class="log-list"></ul>
+                        </div>
+                    </div>
+                </section>
+            </div> <!-- End tab-publisher -->
+
+            <div id="tab-generator" class="tab-content">
+                <section class="card" id="aiGeneratorCard">
+                    <div class="card-header">
+                        <h3>AI Chart Generator</h3>
+                    </div>
+                    <div class="card-content" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                        <div class="dropzone-card" id="aiDropzone">
+                            <div class="dropzone-content">
+                                <div class="icon">📊</div>
+                                <h3>Drop Product Data Excel</h3>
+                                <p>Select file to map columns</p>
+                                <input type="file" id="aiFileInput" accept=".xlsx, .xls" hidden>
+                            </div>
+                        </div>
+                        <div id="aiMappingUI" class="hidden">
+                            <div class="field-row">
+                                <label class="field-label">Sheet</label>
+                                <select id="aiSheetSelect" class="field-input"></select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Header Row</label>
+                                <input type="number" id="aiHeaderRow" class="field-input" value="1" min="1">
+                            </div>
+                            <div class="section-label" style="margin-top:0.5rem">Map Columns</div>
+                            <div class="field-row">
+                                <label class="field-label">ASIN</label>
+                                <select id="mapAsin" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Category</label>
+                                <select id="mapCategory" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Title</label>
+                                <select id="mapTitle" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Bullets</label>
+                                <select id="mapBullets" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Description</label>
+                                <select id="mapDesc" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <div class="field-row">
+                                <label class="field-label">Specs</label>
+                                <select id="mapSpecs" class="field-input">
+                                    <option value="">--Select--</option>
+                                </select>
+                            </div>
+                            <button id="generateChartBtn" class="btn-primary" style="margin-top:1rem;">Analyze
+                                Opportunities</button>
+                        </div>
+
+                        <!-- Opportunities UI -->
+                        <div id="aiOpportunitiesUI" class="hidden"
+                            style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                            <div class="callout callout-accent" id="aiOppCallout"
+                                style="display: flex; align-items: center; gap: 8px; background: #e3f2fd; color: #0d47a1; padding: 12px; border-radius: 6px; border-left: 4px solid #1976d2;">
+                                <span class="callout-icon" style="font-size: 1.2rem;">💡</span>
+                                <span id="aiOppText" style="font-weight: 600;">Found opportunities!</span>
+                            </div>
+                            <div id="aiOppList"
+                                style="margin-top: 1rem; display: flex; flex-direction: column; gap: 8px;">
+                                <!-- Opportunities will be rendered here -->
+                            </div>
+                            <button id="proceedGenerateBtn" class="btn-primary"
+                                style="margin-top: 1.5rem; width: 100%;">Proceed to Generate Charts</button>
+                        </div>
+                    </div>
+                </section>
+            </div> <!-- End tab-generator -->
+
+            <!-- ═══ HISTORY TAB ═══════════════════════════════════════════ -->
+            <div id="tab-history" class="tab-content">
+                <div class="history-toolbar">
+                    <h3 class="preview-toolbar-title">Session History</h3>
+                    <div class="history-filter-bar">
+                        <button class="history-filter-btn active" data-filter="all">All</button>
+                        <button class="history-filter-btn" data-filter="ai_generation">🧠 AI</button>
+                        <button class="history-filter-btn" data-filter="run">▶ Runs</button>
+                        <button class="history-filter-btn" data-filter="import">📂 Imports</button>
+                    </div>
+                    <button class="btn-text" id="clearAllHistoryBtn" style="color:var(--error);font-size:0.7rem;">🗑
+                        Clear All</button>
+                </div>
+                <div id="historyList" class="history-list">
+                    <!-- Populated by renderHistory() in sidepanel.js -->
+                    <div class="history-empty" id="historyEmpty">
+                        <div class="history-empty-icon">📄</div>
+                        <p>No history yet.</p>
+                        <p class="history-empty-sub">AI generations, automation runs, and imports will appear here.</p>
+                    </div>
+                </div>
+            </div> <!-- End tab-history -->
+
+            <div id="tab-settings" class="tab-content">
+                <section class="card" id="settingsCard">
+                    <div class="card-header">
+                        <h3>AI Configuration</h3>
+                    </div>
+                    <div class="card-content" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                        <div class="field-row">
+                            <label class="field-label">AI Platform</label>
+                            <select id="aiPlatformSelect" class="field-input">
+                                <option value="openai">OpenAI (GPT-4o)</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="claude">Anthropic Claude</option>
+                            </select>
+                        </div>
+                        <div class="field-row" id="openaiKeyRow">
+                            <label class="field-label">OpenAI Key</label>
+                            <input type="password" id="openaiKeyInput" class="field-input" placeholder="sk-...">
+                        </div>
+                        <div class="field-row" id="openaiModelRow">
+                            <label class="field-label">OpenAI Model</label>
+                            <select id="openaiModelSelect" class="field-input">
+                                <option value="gpt-4o">GPT-4o</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                        </div>
+                        <div class="field-row hidden" id="openaiCustomRow">
+                            <label class="field-label">Custom Model</label>
+                            <input type="text" id="openaiCustomInput" class="field-input"
+                                placeholder="Enter model name">
+                        </div>
+
+                        <div class="field-row hidden" id="geminiKeyRow">
+                            <label class="field-label">Gemini Key</label>
+                            <input type="password" id="geminiKeyInput" class="field-input" placeholder="AIzaSy...">
+                        </div>
+                        <div class="field-row hidden" id="geminiModelRow">
+                            <label class="field-label">Gemini Model</label>
+                            <select id="geminiModelSelect" class="field-input">
+                                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                        </div>
+                        <div class="field-row hidden" id="geminiCustomRow">
+                            <label class="field-label">Custom Model</label>
+                            <input type="text" id="geminiCustomInput" class="field-input"
+                                placeholder="Enter model name">
+                        </div>
+
+                        <div class="field-row hidden" id="claudeKeyRow">
+                            <label class="field-label">Claude Key</label>
+                            <input type="password" id="claudeKeyInput" class="field-input" placeholder="sk-ant-...">
+                        </div>
+                        <div class="field-row hidden" id="claudeModelRow">
+                            <label class="field-label">Claude Model</label>
+                            <select id="claudeModelSelect" class="field-input">
+                                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                                <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                        </div>
+                        <div class="field-row hidden" id="claudeCustomRow">
+                            <label class="field-label">Custom Model</label>
+                            <input type="text" id="claudeCustomInput" class="field-input"
+                                placeholder="Enter model name">
+                        </div>
+                        <button id="saveSettingsBtn" class="btn-primary">Save Settings</button>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Antigravity Labs</p>
+        </footer>
+    </div>
+    <script type="module" src="sidepanel.js"></script>
+</body>
+
+</html>
