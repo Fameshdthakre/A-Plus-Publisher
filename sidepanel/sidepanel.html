@@ -55,11 +55,20 @@
                         <h3>Data Preview</h3>
                         <div class="flex-center-gap">
                             <span class="chart-count-badge" id="chartCountBadge">0 charts</span>
-                            <button class="btn-text" id="downloadAllChartsBtn" style="display:none;"
+                            <button class="btn-text d-none" id="downloadAllChartsBtn"
                                 title="Download all charts as a single Excel file with one tab per chart">📦 Download
                                 All (.xlsx)</button>
                             <button class="btn-text" id="toggleAllCharts">☑ Select All</button>
                             <button class="btn-text" id="clearData">✕ Clear</button>
+                        </div>
+                    </div>
+                    <div class="sandbox-toggle-bar">
+                        <span class="sandbox-toggle-title">💡 Live Amazon Sandbox</span>
+                        <div class="sandbox-btn-group">
+                            <button id="btnSandboxDesktop" class="btn-sm active"
+                                title="Switch to emulated Amazon desktop grid view">🖥 Desktop View</button>
+                            <button id="btnSandboxMobile" class="btn-sm"
+                                title="Switch to emulated Amazon mobile card swipe view">📱 Mobile View</button>
                         </div>
                     </div>
                     <div class="preview-container" id="previewContainer">
@@ -109,7 +118,15 @@
                     <div class="card-header">
                         <h3>AI Chart Generator</h3>
                     </div>
-                    <div class="card-content" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                    <div class="card-content card-content-gap">
+                        <p class="note-text-center">Note: Only the first 50 rows will be analyzed for opportunities.</p>
+
+                        <!-- Error Display Area -->
+                        <div id="aiErrorDiv" class="hidden ai-error-banner">
+                            <span class="large-emoji">⚠️</span>
+                            <span id="aiErrorText"></span>
+                        </div>
+
                         <div class="dropzone-card" id="aiDropzone">
                             <div class="dropzone-content">
                                 <div class="icon">📊</div>
@@ -121,67 +138,90 @@
                         <div id="aiMappingUI" class="hidden">
                             <div class="field-row">
                                 <label class="field-label">Sheet</label>
-                                <select id="aiSheetSelect" class="field-input"></select>
+                                <select id="aiSheetSelect" class="field-input" title="Select Sheet"></select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Header Row</label>
-                                <input type="number" id="aiHeaderRow" class="field-input" value="1" min="1">
+                                <input type="number" id="aiHeaderRow" class="field-input" value="1" min="1"
+                                    title="Header Row">
                             </div>
-                            <div class="section-label" style="margin-top:0.5rem">Map Columns</div>
+                            <div class="field-row">
+                                <label class="field-label">AI CRO Strategy</label>
+                                <select id="aiStrategySelect" class="field-input" title="Select AI CRO Strategy">
+                                    <option value="balanced">Balanced CRO (Standard)</option>
+                                    <option value="premium">Premium Justification (Quality & Materials)</option>
+                                    <option value="technical">Technical Focus (Detailed Specs)</option>
+                                    <option value="usability">Usability & Lifestyle (Comfort & Daily Use)</option>
+                                </select>
+                            </div>
+                            <div class="section-header-row mt-05">
+                                <span class="section-label">Map Columns</span>
+                                <button id="aiAutoMapBtn" class="btn-auto-map" type="button"
+                                    title="One-click intelligent column mapping based on keywords and data pattern checks">⚡
+                                    Smart Auto-Map</button>
+                            </div>
                             <div class="field-row">
                                 <label class="field-label">ASIN</label>
-                                <select id="mapAsin" class="field-input">
+                                <select id="mapAsin" class="field-input" title="Map ASIN Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Category</label>
-                                <select id="mapCategory" class="field-input">
+                                <select id="mapCategory" class="field-input" title="Map Category Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Title</label>
-                                <select id="mapTitle" class="field-input">
+                                <select id="mapTitle" class="field-input" title="Map Title Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Bullets</label>
-                                <select id="mapBullets" class="field-input">
+                                <select id="mapBullets" class="field-input" title="Map Bullets Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Description</label>
-                                <select id="mapDesc" class="field-input">
+                                <select id="mapDesc" class="field-input" title="Map Description Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
                                 <label class="field-label">Specs</label>
-                                <select id="mapSpecs" class="field-input">
+                                <select id="mapSpecs" class="field-input" title="Map Specs Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
-                            <button id="generateChartBtn" class="btn-primary" style="margin-top:1rem;">Analyze
+                            <button id="generateChartBtn" class="btn-primary mt-1">Analyze
                                 Opportunities</button>
+                            <div class="flex-center-gap mt-05">
+                                <button id="importOppBtn" class="btn-secondary btn-full" type="button">📥 Import Saved
+                                    Groups (.json)</button>
+                                <input type="file" id="importOppFile" accept=".json" hidden>
+                            </div>
+                            <button id="aiChangeFileBtn" class="btn-text btn-full mt-05">✕ Change File</button>
                         </div>
 
                         <!-- Opportunities UI -->
-                        <div id="aiOpportunitiesUI" class="hidden"
-                            style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-                            <div class="callout callout-accent" id="aiOppCallout"
-                                style="display: flex; align-items: center; gap: 8px; background: #e3f2fd; color: #0d47a1; padding: 12px; border-radius: 6px; border-left: 4px solid #1976d2;">
-                                <span class="callout-icon" style="font-size: 1.2rem;">💡</span>
-                                <span id="aiOppText" style="font-weight: 600;">Found opportunities!</span>
+                        <div id="aiOpportunitiesUI" class="hidden ai-opportunities-container">
+                            <div class="callout callout-accent ai-callout-banner" id="aiOppCallout">
+                                <span class="callout-icon large-emoji">💡</span>
+                                <span id="aiOppText" class="font-semibold">Found opportunities!</span>
                             </div>
-                            <div id="aiOppList"
-                                style="margin-top: 1rem; display: flex; flex-direction: column; gap: 8px;">
+                            <div class="flex-center-gap" style="margin-bottom: 1rem;">
+                                <button id="exportOppBtn" class="btn-secondary btn-full" type="button">📤 Export Groups
+                                    JSON</button>
+                            </div>
+                            <div id="aiOppList" class="ai-opp-list">
                                 <!-- Opportunities will be rendered here -->
                             </div>
-                            <button id="proceedGenerateBtn" class="btn-primary"
-                                style="margin-top: 1.5rem; width: 100%;">Proceed to Generate Charts</button>
+                            <button id="proceedGenerateBtn" class="btn-primary mt-15">Proceed to Generate
+                                Charts</button>
+                            <button id="aiClearOppBtn" class="btn-text btn-full mt-05">✕ Clear & Reset</button>
                         </div>
                     </div>
                 </section>
@@ -197,7 +237,7 @@
                         <button class="history-filter-btn" data-filter="run">▶ Runs</button>
                         <button class="history-filter-btn" data-filter="import">📂 Imports</button>
                     </div>
-                    <button class="btn-text" id="clearAllHistoryBtn" style="color:var(--error);font-size:0.7rem;">🗑
+                    <button class="btn-text btn-clear-history" id="clearAllHistoryBtn">🗑
                         Clear All</button>
                 </div>
                 <div id="historyList" class="history-list">
@@ -215,10 +255,10 @@
                     <div class="card-header">
                         <h3>AI Configuration</h3>
                     </div>
-                    <div class="card-content" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                    <div class="card-content card-content-gap">
                         <div class="field-row">
                             <label class="field-label">AI Platform</label>
-                            <select id="aiPlatformSelect" class="field-input">
+                            <select id="aiPlatformSelect" class="field-input" title="Select AI Platform">
                                 <option value="openai">OpenAI (GPT-4o)</option>
                                 <option value="gemini">Google Gemini</option>
                                 <option value="claude">Anthropic Claude</option>
@@ -230,7 +270,7 @@
                         </div>
                         <div class="field-row" id="openaiModelRow">
                             <label class="field-label">OpenAI Model</label>
-                            <select id="openaiModelSelect" class="field-input">
+                            <select id="openaiModelSelect" class="field-input" title="Select OpenAI Model">
                                 <option value="gpt-4o">GPT-4o</option>
                                 <option value="gpt-4o-mini">GPT-4o Mini</option>
                                 <option value="custom">Custom...</option>
@@ -248,7 +288,7 @@
                         </div>
                         <div class="field-row hidden" id="geminiModelRow">
                             <label class="field-label">Gemini Model</label>
-                            <select id="geminiModelSelect" class="field-input">
+                            <select id="geminiModelSelect" class="field-input" title="Select Gemini Model">
                                 <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                 <option value="custom">Custom...</option>
@@ -266,7 +306,7 @@
                         </div>
                         <div class="field-row hidden" id="claudeModelRow">
                             <label class="field-label">Claude Model</label>
-                            <select id="claudeModelSelect" class="field-input">
+                            <select id="claudeModelSelect" class="field-input" title="Select Claude Model">
                                 <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
                                 <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
                                 <option value="custom">Custom...</option>

@@ -3,7 +3,7 @@
  * Unified factory for AI requests across OpenAI, Gemini, and Claude.
  */
 
-import { PROMPTS } from './prompts.js';
+import { PROMPTS, STRATEGY_BLOCKS } from './prompts.js';
 
 export const AIProvider = {
     async fetchAI(settings, prompt, options = {}) {
@@ -123,8 +123,9 @@ export const AIProvider = {
         return data.content[0].text;
     },
 
-    async generateChart(productData, settings) {
-        const prompt = `${PROMPTS.GENERATE_CHART}\n\nProduct Data:\n"""\n${JSON.stringify(productData, null, 2)}\n"""`;
+    async generateChart(productData, settings, strategy = 'balanced') {
+        const strategyInstructions = STRATEGY_BLOCKS[strategy] || STRATEGY_BLOCKS.balanced;
+        const prompt = `${PROMPTS.GENERATE_CHART}\n\n${strategyInstructions}\n\nProduct Data:\n"""\n${JSON.stringify(productData, null, 2)}\n"""`;
 
         let options = {};
         const asinProperties = {};
@@ -213,7 +214,7 @@ export const AIProvider = {
                         items: {
                             type: "object",
                             properties: {
-                                groupName: { type: "string", description: "Clear, commercial name for the group/category" },
+                                groupName: { type: "string", description: "Clear, commercial name/title for the group. Max 250 chars, straight and precise description of main product." },
                                 asins: {
                                     type: "array",
                                     items: { type: "string" },
@@ -238,7 +239,7 @@ export const AIProvider = {
                         items: {
                             type: "object",
                             properties: {
-                                groupName: { type: "string", description: "Clear, commercial name for the group/category" },
+                                groupName: { type: "string", description: "Clear, commercial name/title for the group. Max 250 chars, straight and precise description of main product." },
                                 asins: {
                                     type: "array",
                                     items: { type: "string" }
@@ -254,13 +255,33 @@ export const AIProvider = {
         }
 
         const result = await this.fetchAI(settings, prompt, options);
-        return this.parseJSON(result, "opportunities");
+        const parsed = this.parseJSON(result, "opportunities");
+
+        // Validation Engine: Ensure we return an array of opportunities
+        if (Array.isArray(parsed)) {
+            return parsed;
+        } else if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.opportunities)) return parsed.opportunities;
+            if (Array.isArray(parsed.groups)) return parsed.groups;
+            // If it's a single opportunity object, wrap it in an array
+            if (parsed.groupName && Array.isArray(parsed.asins)) return [parsed];
+        }
+
+        throw new Error("AI response did not contain a valid list of opportunities.");
     },
 
     parseJSON(str, key = null) {
         try {
-            // MINOR-1: Regex handles optional trailing whitespace before closing fence
-            const cleanStr = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+            let cleanStr = str.trim();
+            // Find the first occurrence of '{' or '['
+            const startIndex = cleanStr.search(/[\{\[]/);
+            // Find the last occurrence of '}' or ']'
+            const endIndex = Math.max(cleanStr.lastIndexOf('}'), cleanStr.lastIndexOf(']'));
+
+            if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                cleanStr = cleanStr.substring(startIndex, endIndex + 1);
+            }
+
             const parsed = JSON.parse(cleanStr);
             if (key && parsed[key]) return parsed[key];
             return parsed;

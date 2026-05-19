@@ -2,6 +2,7 @@
 
 import { setupAIGenerator } from "../scripts/ai-generator.js";
 import { HistoryManager } from "../scripts/history.js";
+import { SandboxRenderer } from "../scripts/sandbox-renderer.js";
 
 // Mock Chrome Extension APIs if running in normal web page for local testing/preview
 if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
@@ -59,6 +60,24 @@ document.addEventListener("DOMContentLoaded", () => {
   if (downloadAllChartsBtn) {
     downloadAllChartsBtn.addEventListener("click", () => {
       downloadAllChartsAsExcel(parsedData);
+    });
+  }
+
+  // --- Amazon Preview Sandbox Global Toggles ---
+  const btnDesktop = document.getElementById("btnSandboxDesktop");
+  const btnMobile = document.getElementById("btnSandboxMobile");
+  if (btnDesktop && btnMobile) {
+    btnDesktop.addEventListener("click", () => {
+      btnDesktop.classList.add("active");
+      btnMobile.classList.remove("active");
+      SandboxRenderer.setGlobalViewMode("desktop");
+      renderPreview();
+    });
+    btnMobile.addEventListener("click", () => {
+      btnMobile.classList.add("active");
+      btnDesktop.classList.remove("active");
+      SandboxRenderer.setGlobalViewMode("mobile");
+      renderPreview();
     });
   }
 
@@ -1247,6 +1266,19 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         inner.appendChild(addMetBtn);
       }
+
+      // 5. Live Amazon Preview Sandbox
+      const sandboxContainer = document.createElement("div");
+      sandboxContainer.className = "sandbox-container";
+      inner.appendChild(sandboxContainer);
+
+      SandboxRenderer.render(sandboxContainer, chart, (type, rowIdx, colIdx, newVal) => {
+        if (type === "metric") {
+          chart.attributes[rowIdx].values[colIdx] = newVal;
+          renderPreview();
+          validateInputsDebounced();
+        }
+      });
 
       accBody.appendChild(inner);
       acc.appendChild(accBody);
