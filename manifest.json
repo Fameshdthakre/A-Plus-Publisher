@@ -3,6 +3,11 @@
   "name": "A-Plus Publisher: Comparison Chart Pro",
   "version": "1.0.0",
   "description": "Automate comparison chart creation on Amazon Vendor and Seller Central.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["sidePanel", "storage", "unlimitedStorage", "scripting"],
   "host_permissions": [
     "https://*.amazon.com/*",
@@ -21,6 +26,11 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "action": {
-    "default_title": "Open A-Plus Publisher"
+    "default_title": "Open A-Plus Publisher",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }
