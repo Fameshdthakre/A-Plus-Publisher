@@ -4,7 +4,7 @@
  * Features:
  * - Real-time desktop/mobile simulation toggle.
  * - Dynamic cell editing with direct source data updates.
- * - Real-time character/word limit linting with amber alerts for truncation risk (>25 chars or >3 words).
+ * - Real-time character limit linting with amber alerts for truncation risk (>250 chars).
  */
 export const SandboxRenderer = {
     // Current active global view mode ('desktop' or 'mobile')
@@ -30,21 +30,12 @@ export const SandboxRenderer = {
             return { isOverlimit: false };
         }
         const charCount = cleanVal.length;
-        const words = cleanVal.split(/\s+/).filter(Boolean);
-        const wordCount = words.length;
 
-        if (charCount > 25) {
+        if (charCount > 250) {
             return {
                 isOverlimit: true,
-                reason: `${charCount} chars (max 25 recommended)`,
+                reason: `${charCount} chars (max 250 recommended)`,
                 count: charCount
-            };
-        }
-        if (wordCount > 3) {
-            return {
-                isOverlimit: true,
-                reason: `${wordCount} words (max 3 recommended)`,
-                count: wordCount
             };
         }
         return { isOverlimit: false };

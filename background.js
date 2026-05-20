@@ -75,6 +75,15 @@ class JobManager {
     async completeJob(chart) {
         if (!this.isExecuting) return;
 
+        if (this.currentTabId) {
+            chrome.tabs.remove(this.currentTabId, () => {
+                if (chrome.runtime.lastError) {
+                    console.log("A-Plus Publisher: Error closing completed tab:", chrome.runtime.lastError.message);
+                }
+            });
+            this.currentTabId = null;
+        }
+
         const res = await chrome.storage.local.get(['processedCharts']);
         let processed = res.processedCharts || [];
         if (chart) {
@@ -103,7 +112,17 @@ class JobManager {
             progress: 10
         });
 
-        chrome.tabs.create({ url: nextChart.draftUrl, active: true }, (tab) => {
+        const targetUrl = nextChart.draftUrl || "https://vendorcentral.amazon.com/hz/vendor/members/aplus/content-manager";
+
+        safeSendMessage({
+            type: "AUTOMATION_STATUS",
+            status: nextChart.draftUrl 
+                ? `Navigating to draft for ${nextChart.name}...`
+                : `Navigating to A+ Content Manager to create draft for ${nextChart.name}...`,
+            progress: 10
+        });
+
+        chrome.tabs.create({ url: targetUrl, active: true }, (tab) => {
             this.currentTabId = tab.id;
 
             if (tab && tab.windowId) {
@@ -142,7 +161,7 @@ class JobManager {
             return;
         }
 
-        if (attempt > 20) { // Give it about 30 seconds max
+        if (attempt > 40) { // Give it about 60+ seconds max
             safeSendMessage({ type: "AUTOMATION_STATUS", status: `Error: Could not connect to Amazon page.`, progress: 0 });
             this.isExecuting = false;
             return;
@@ -152,20 +171,23 @@ class JobManager {
             if (!this.isExecuting) return;
 
             if (chrome.runtime.lastError || !response || response.status !== "ready") {
-                safeSendMessage({ type: "AUTOMATION_STATUS", status: `Waiting for Amazon to load... (Attempt ${attempt + 1}/20)`, progress: 10 });
+                safeSendMessage({ type: "AUTOMATION_STATUS", status: `Waiting for Amazon to load... (Attempt ${attempt + 1}/40)`, progress: 10 });
 
                 // PERF-4: Exponential backoff — faster on quick-loading pages,
                 // patient on slow ones. Caps at 8s. Formula: 500ms * 2^attempt.
                 const delay = Math.min(500 * Math.pow(2, attempt), 8000);
 
-                if (attempt === 3 && !scriptInjected) {
-                    safeSendMessage({ type: "AUTOMATION_STATUS", status: `Manually injecting automation engine...`, progress: 10 });
+                if (attempt > 0 && attempt % 3 === 0) {
+                    safeSendMessage({ type: "AUTOMATION_STATUS", status: `Injecting automation engine...`, progress: 10 });
                     chrome.scripting.executeScript({
                         target: { tabId: tabId },
                         files: ["scripts/automation.js"]
-                    }).catch(err => console.warn("Injection failed:", err));
-
-                    setTimeout(() => this.executeWithRetry(tabId, chart, attempt + 1, true), delay);
+                    }).then(() => {
+                        setTimeout(() => this.executeWithRetry(tabId, chart, attempt + 1, true), delay);
+                    }).catch(err => {
+                        console.warn("Injection failed:", err);
+                        setTimeout(() => this.executeWithRetry(tabId, chart, attempt + 1, false), delay);
+                    });
                 } else {
                     setTimeout(() => this.executeWithRetry(tabId, chart, attempt + 1, scriptInjected), delay);
                 }

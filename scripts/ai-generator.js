@@ -159,6 +159,57 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     category: document.getElementById("mapCategory"),
   };
 
+  const validationHelper = document.getElementById("aiMappingValidationHelper");
+
+  function updateMappingStatus() {
+    const asinVal = mapSelects.asin?.value || "";
+    const titleVal = mapSelects.title?.value || "";
+    const categoryVal = mapSelects.category?.value || "";
+    const bulletsVal = mapSelects.bullets?.value || "";
+    const descVal = mapSelects.desc?.value || "";
+
+    const requiredKeys = ["asin", "title", "category", "bullets", "desc"];
+
+    Object.entries(mapSelects).forEach(([key, select]) => {
+      if (!select) return;
+      if (select.value !== "") {
+        select.classList.add("mapped-success");
+        select.classList.remove("mapped-warning");
+      } else {
+        select.classList.remove("mapped-success");
+        if (requiredKeys.includes(key)) {
+          select.classList.add("mapped-warning");
+        } else {
+          select.classList.remove("mapped-warning");
+        }
+      }
+    });
+
+    const isAllRequiredMapped =
+      asinVal !== "" &&
+      titleVal !== "" &&
+      categoryVal !== "" &&
+      bulletsVal !== "" &&
+      descVal !== "";
+
+    if (generateBtn) {
+      generateBtn.disabled = !isAllRequiredMapped;
+      generateBtn.style.opacity = isAllRequiredMapped ? "1" : "0.6";
+      generateBtn.style.cursor = isAllRequiredMapped ? "pointer" : "not-allowed";
+    }
+
+    if (validationHelper) {
+      validationHelper.classList.toggle("hidden", isAllRequiredMapped);
+    }
+  }
+
+  // Register change listeners for real-time validation status
+  Object.values(mapSelects).forEach((select) => {
+    if (select) {
+      select.addEventListener("change", updateMappingStatus);
+    }
+  });
+
   const STRATEGY_DESCRIPTIONS = {
     balanced: "<strong>Balanced CRO (Standard)</strong><br>A structured mix of Hero highlights, checkmarks (10:6), and clean metrics. Best for general products.",
     premium: "<strong>Premium Justification</strong><br>Focuses on quality, materials, and high-end aesthetics. Uses more descriptive checkmarks (10:7) to convey value.",
@@ -338,6 +389,7 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
           mapSelects.category.value = idx;
       });
     }
+    updateMappingStatus();
   }
 
   const autoMapBtn = document.getElementById("aiAutoMapBtn");
@@ -550,6 +602,8 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       }
     });
 
+    updateMappingStatus();
+
     if (mapCount > 0) {
       // Play dynamic user notification feedback
       const toast = document.createElement("div");
@@ -587,8 +641,17 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     if (!currentSheetData) return null;
     const asinCol = mapSelects.asin.value;
     const titleCol = mapSelects.title.value;
+    const categoryCol = mapSelects.category.value;
+    const bulletsCol = mapSelects.bullets.value;
+    const descCol = mapSelects.desc.value;
 
-    if (asinCol === "" || titleCol === "") {
+    if (
+      asinCol === "" ||
+      titleCol === "" ||
+      categoryCol === "" ||
+      bulletsCol === "" ||
+      descCol === ""
+    ) {
       return null;
     }
 
@@ -863,13 +926,24 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       // Validate that Excel file is loaded and mapped
       const asinCol = mapSelects.asin.value;
       const titleCol = mapSelects.title.value;
+      const categoryCol = mapSelects.category.value;
+      const bulletsCol = mapSelects.bullets.value;
+      const descCol = mapSelects.desc.value;
 
       if (!currentSheetData) {
         alert("Please upload a product data Excel file first.");
         return;
       }
-      if (asinCol === "" || titleCol === "") {
-        alert("Please map the ASIN and Title columns first so imported groups can be resolved.");
+      if (
+        asinCol === "" ||
+        titleCol === "" ||
+        categoryCol === "" ||
+        bulletsCol === "" ||
+        descCol === ""
+      ) {
+        alert(
+          "Please map all required columns (ASIN, Category, Title, Bullets, and Description) first so imported groups can be resolved.",
+        );
         return;
       }
       importOppFile.click();
@@ -906,7 +980,9 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     generateBtn.addEventListener("click", async () => {
       const allProducts = parseAllProducts();
       if (!allProducts) {
-        alert("ASIN and Title columns must be mapped.");
+        alert(
+          "ASIN, Category, Title, Bullets, and Description columns must be mapped.",
+        );
         return;
       }
 

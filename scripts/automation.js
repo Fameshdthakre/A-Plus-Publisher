@@ -29,10 +29,99 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
         updateStatus(`Starting Automation for ${chart.name}...`, 10);
 
         try {
-            updateStatus("Waiting for page to fully load...", 11);
+            const isDashboard = window.location.href.includes('/aplus/content-manager');
+
+            if (!chart.draftUrl && isDashboard) {
+                // Step 1: Click "Start creating A+ content"
+                updateStatus("Creating new A+ Content Draft...", 11);
+                const createProjBtn = await waitForElement('kat-button[data-component-id="create-project-button"]', 15000);
+                if (!createProjBtn) throw new Error('"Start creating A+ content" button not found.');
+                
+                checkStopped();
+                updateStatus("Clicking 'Start creating A+ content'...", 13);
+                const innerCreateProj = (createProjBtn.shadowRoot || createProjBtn).querySelector('button') || createProjBtn;
+                innerCreateProj.click();
+                
+                // Step 2: Click "Create Basic A+"
+                updateStatus("Waiting for 'Create Basic A+' button...", 15);
+                const createBasicBtn = await waitForElement('kat-button[data-component-id="create-emc-standard-button"]', 10000);
+                if (!createBasicBtn) throw new Error('"Create Basic A+" button not found.');
+                
+                checkStopped();
+                updateStatus("Clicking 'Create Basic A+'...", 17);
+                const innerCreateBasic = (createBasicBtn.shadowRoot || createBasicBtn).querySelector('button') || createBasicBtn;
+                innerCreateBasic.click();
+                
+                // Wait a few seconds for SPA transition/navigation
+                await wait(2000);
+            }
+
+            updateStatus("Waiting for editor to load...", 19);
             // Wait up to 30 seconds for the main editor tab to appear to ensure SPA is fully loaded
             await waitForElement('kat-tab[data-component-id="content-details-tab-edit"]', 30000);
             checkStopped();
+
+            // If this is a newly created draft (no draftUrl in chart yet), set title and save it first
+            if (!chart.draftUrl) {
+                updateStatus("Setting A+ Content Title...", 21);
+                const chartTitle = chart.contentTitle || chart.name;
+                let contentNameInput = findElementDeep('input[part="input"][id="katal-id-10"]') ||
+                    findElementDeep('kat-input[unique-id="katal-id-0"]') ||
+                    findElementDeep('kat-input[label*="Content name" i]') ||
+                    findElementDeep('kat-input[label*="Name" i]') ||
+                    findElementDeep('kat-input[label*="Title" i]') ||
+                    findElementDeep('#aplus-content-name') ||
+                    findElementDeep('input[placeholder*="Content name" i]') ||
+                    findElementDeep('input[placeholder*="content name" i]');
+
+                if (!contentNameInput) {
+                    const labelEl = findByText("Content name") || findByText("Content Name") || findByText("Content name :");
+                    if (labelEl) {
+                        const container = labelEl.closest('div') || labelEl.parentElement;
+                        if (container) {
+                            contentNameInput = container.querySelector('kat-input') || container.querySelector('input');
+                        }
+                    }
+                }
+
+                if (!contentNameInput) throw new Error("A+ Content Name input field not found.");
+                await fillKatalInput(contentNameInput, chartTitle);
+                checkStopped();
+
+                updateStatus("Saving initial empty draft...", 23);
+                const saveBtn = findElementDeep('kat-button[data-component-id="save-content-button"]');
+                if (!saveBtn) throw new Error("Save Draft button not found.");
+                const innerSave = (saveBtn.shadowRoot || saveBtn).querySelector('button') || saveBtn;
+                innerSave.click();
+
+                // Wait for URL to update to get the new Draft Link
+                updateStatus("Waiting for new Draft URL to register...", 25);
+                let newDraftUrl = "";
+                for (let i = 0; i < 50; i++) {
+                    checkStopped();
+                    const currentUrl = window.location.href;
+                    if (/\/content\/[a-f0-9\-]{36}/i.test(currentUrl)) {
+                        newDraftUrl = currentUrl;
+                        break;
+                    }
+                    await wait(200);
+                }
+
+                if (!newDraftUrl) {
+                    newDraftUrl = window.location.href;
+                    console.warn("Could not find UUID in URL, using current URL:", newDraftUrl);
+                }
+
+                // Update chart URL properties
+                chart.draftUrl = newDraftUrl;
+                const match = newDraftUrl.match(/\/content\/([a-f0-9\-]{36})/i);
+                chart.previewUrl = match && match[1]
+                    ? `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`
+                    : "";
+
+                updateStatus("New draft saved! Proceeding with populate...", 27);
+                await wait(1000);
+            }
 
             // Check for Edit Mode
             updateStatus("Checking Edit Mode...", 12);
@@ -83,6 +172,15 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             let module = findElementDeep('div[data-component-id="comparison"]');
 
             if (!module) {
+                const moduleList = findElementDeep('div[data-component-id="module-list"]');
+                const existingModules = moduleList 
+                    ? findAllElementsDeep('div[data-component-id="editor-module"]', moduleList) 
+                    : findAllElementsDeep('div[data-component-id="module-list"] div[data-component-id="editor-module"]');
+                console.log(`Checking module count: found ${existingModules.length} existing modules.`);
+                if (existingModules.length >= 5) {
+                    throw new Error("Limit reached: Max 5 modules are already added. Cannot add Comparison Chart.");
+                }
+
                 updateStatus("Chart not found. Attempting to add...", 30);
                 await createComparisonChartModule();
                 module = await waitForElement('div[data-component-id="comparison"]', 5000);
@@ -238,7 +336,8 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             if (chart.contentTitle) {
                 checkStopped();
                 updateStatus("Setting A+ Content Title...", 93);
-                let contentNameInput = findElementDeep('kat-input[unique-id="katal-id-0"]') ||
+                let contentNameInput = findElementDeep('input[part="input"][id="katal-id-10"]') ||
+                    findElementDeep('kat-input[unique-id="katal-id-0"]') ||
                     findElementDeep('kat-input[label*="Content name" i]') ||
                     findElementDeep('kat-input[label*="Name" i]') ||
                     findElementDeep('kat-input[label*="Title" i]') ||
@@ -272,6 +371,16 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
                 await wait(3000);
             }
 
+            // Grab the A+ draft link from the address bar at the end of processing
+            const finalUrl = window.location.href;
+            if (finalUrl) {
+                chart.draftUrl = finalUrl;
+                const match = finalUrl.match(/\/content\/([a-f0-9\-]{36})/i);
+                if (match && match[1]) {
+                    chart.previewUrl = `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
+                }
+            }
+
             updateStatus(`Chart ${chart.name} Complete!`, 100);
             chrome.runtime.sendMessage({ type: "CHART_COMPLETED", data: { chart: chart } });
         } catch (error) {
@@ -281,7 +390,8 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             // If it wasn't a stop signal, we normally continue to next chart.
             // But if stopped, we just halt.
             if (error.message !== "Automation stopped by user.") {
-                chrome.runtime.sendMessage({ type: "CHART_COMPLETED" });
+                chart.error = error.message;
+                chrome.runtime.sendMessage({ type: "CHART_COMPLETED", data: { chart } });
             }
         }
     }
@@ -313,38 +423,71 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             return;
         }
 
-        el.focus();
+        const tagName = el.tagName.toLowerCase();
+        const nativeInput = tagName === 'input' || tagName === 'textarea'
+            ? el
+            : (el.querySelector('input') || el.shadowRoot?.querySelector('input'));
 
-        // 1. Clear existing value first to force clean replacement in React/Katal internal store
-        el.value = "";
-        el.setAttribute('value', "");
-        el.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value: "" } }));
-        el.dispatchEvent(new CustomEvent('input', { bubbles: true, detail: { value: "" } }));
+        if (nativeInput) {
+            nativeInput.focus();
 
-        const internalInput = el.querySelector('input') || el.shadowRoot?.querySelector('input');
-        if (internalInput) {
-            internalInput.focus();
-            internalInput.value = "";
-            internalInput.dispatchEvent(new Event('input', { bubbles: true }));
-            internalInput.dispatchEvent(new Event('change', { bubbles: true }));
+            // Try execCommand first (universal framework & validation support)
+            let success = false;
+            try {
+                nativeInput.select();
+                success = document.execCommand('insertText', false, value);
+            } catch (err) {
+                console.warn("execCommand insertText failed:", err);
+            }
+
+            if (!success) {
+                // Fallback: React 16+ value setter override bypass
+                const setVal = (inputEl, val) => {
+                    const valueSetter = Object.getOwnPropertyDescriptor(inputEl, 'value')?.set;
+                    const prototype = Object.getPrototypeOf(inputEl);
+                    const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+                    
+                    if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+                        prototypeValueSetter.call(inputEl, val);
+                    } else if (valueSetter) {
+                        valueSetter.call(inputEl, val);
+                    } else {
+                        inputEl.value = val;
+                    }
+                };
+
+                // Clear first
+                setVal(nativeInput, "");
+                nativeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                nativeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                await wait(50);
+
+                // Set final value
+                setVal(nativeInput, value);
+                nativeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                nativeInput.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                nativeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                nativeInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            // Standard events fallback
+            nativeInput.dispatchEvent(new CustomEvent('input', { bubbles: true, detail: { value } }));
+            nativeInput.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value } }));
+
+            nativeInput.blur();
         }
-        await wait(50);
 
-        // 2. Populate new value
-        el.value = value;
-        el.setAttribute('value', value);
-        el.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value } }));
-        el.dispatchEvent(new CustomEvent('input', { bubbles: true, detail: { value } }));
-
-        if (internalInput) {
-            internalInput.value = value;
-            internalInput.dispatchEvent(new Event('input', { bubbles: true }));
-            internalInput.dispatchEvent(new Event('change', { bubbles: true }));
-            internalInput.blur();
+        if (el !== nativeInput) {
+            el.focus();
+            el.value = value;
+            el.setAttribute('value', value);
+            el.dispatchEvent(new CustomEvent('input', { bubbles: true, detail: { value } }));
+            el.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value } }));
+            el.blur();
         }
 
-        el.blur();
-        await wait(150);
+        await wait(250);
     }
 
     async function selectKatalDropdownOption(dropdown, label) {
@@ -436,6 +579,34 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             }
         }
         return null;
+    }
+
+    function findAllElementsDeep(selector, root = document) {
+        const results = [];
+        const queue = [root];
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (!current) continue;
+
+            if (current.querySelectorAll) {
+                const matches = current.querySelectorAll(selector);
+                matches.forEach(el => {
+                    if (!results.includes(el)) {
+                        results.push(el);
+                    }
+                });
+            }
+
+            if (current.shadowRoot) {
+                queue.push(current.shadowRoot);
+            }
+
+            const children = current.children || [];
+            for (let i = 0; i < children.length; i++) {
+                queue.push(children[i]);
+            }
+        }
+        return results;
     }
 
     function findByText(text, root = document) {

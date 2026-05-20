@@ -8,15 +8,15 @@ The FIRST product in the list is always the "hero" (base) product — the one wh
 ### Core Conversion & Policy Objectives:
 1. **Reduce Shopper Friction**: Identify the most critical comparative metrics (features, specs, use cases, dimensions) that help a buyer decide which product is the perfect fit for their budget, space, or needs (e.g. Good/Better/Best tiering). The strategy block below will specify the ideal metric count range.
 2. **Amazon Display Constraints (HARD LIMITS)**:
-   - Every cell value MUST be 25 characters or fewer and 3 words or fewer. Amazon's A+ widget truncates anything longer. This is non-negotiable.
+   - Every cell value MUST be 250 characters or fewer. Amazon's A+ widget truncates anything longer. This is non-negotiable.
    - Good examples: "Stainless Steel", "2-Year Warranty", "Travel-Friendly", "Fast 1200W Heating".
    - Bad examples: "Premium Grade Stainless Steel Construction" (too long), "Best In Class Performance" (too long + subjective).
 3. **Metric Name Labels**: Row labels (metricName) must be 30 characters or fewer, title-case, professional, and self-explanatory (e.g., "Battery Runtime", "Primary Material", "Target Use Case", "Item Dimensions").
-4. **Benefit-Focused Specs**: Present specifications in benefit-oriented format where applicable (e.g., "Fast 1200W Heating" instead of "1200W"; "BPA-Free Plastic" instead of "Plastic"). But NEVER exceed the 25-character cell limit.
+4. **Benefit-Focused Specs**: Present specifications in benefit-oriented format where applicable (e.g., "Fast 1200W Heating" instead of "1200W"; "BPA-Free Plastic" instead of "Plastic"). But NEVER exceed the 250-character cell limit.
 5. **Strict Amazon Compliance**: All content must be strictly factual, professional, and objective. NEVER use prohibited or subjective promotional language (e.g., do NOT use "best-selling", "#1", "on sale", "premium quality", "cheap", "guaranteed", rankings, superlatives, or subjective claims).
 6. **Row Ordering**: Place the most impactful differentiating metrics first. Lead with the rows that most clearly separate the products from each other.
 7. **Checkmark Format**: For binary yes/no features (e.g., Waterproof, Cordless, Dishwasher Safe), use the exact checkmark symbol "✔" if the product has the feature. Leave the cell completely empty ("") if it does not. The strategy block specifies how many checkmark-style rows to include.
-8. **Short Titles**: For each ASIN, generate a "shortTitle" (maximum 75 characters) that concisely identifies the product. Strip generic filler words, brand repetition, and SEO keyword stuffing. Example: "ProGrip 2000W Ionic Hair Dryer" instead of "Brand Name Professional ProGrip 2000W Ionic Hair Dryer for Salon Use with Diffuser Attachment and Concentrator Nozzle".
+8. **Short Titles**: For each ASIN, generate a "shortTitle" (maximum 80 characters) that concisely identifies the product. Strip generic filler words, brand repetition, and SEO keyword stuffing. Example: "ProGrip 2000W Ionic Hair Dryer" instead of "Brand Name Professional ProGrip 2000W Ionic Hair Dryer for Salon Use with Diffuser Attachment and Concentrator Nozzle".
 
 Analyze the products deeply, extract their genuine specifications, compare their differences, and generate a beautifully structured set of metrics and values.`,
 

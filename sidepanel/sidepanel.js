@@ -851,9 +851,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     parsedData.forEach((chart, index) => {
       const hasErrors = getChartErrors(chart).length > 0;
+      const hasWarnings = !chart.draftUrl;
+      const statusClass = hasErrors ? "has-errors" : (hasWarnings ? "has-warnings" : "is-valid");
 
       const acc = document.createElement("div");
-      acc.className = `chart-accordion ${index === openAccordionIndex ? "open" : ""} ${hasErrors ? "has-errors" : "is-valid"}`;
+      acc.className = `chart-accordion ${index === openAccordionIndex ? "open" : ""} ${statusClass}`;
 
       const accHeader = document.createElement("div");
       accHeader.className = "accordion-header";
@@ -885,7 +887,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const badgeSpan = document.createElement("span");
       badgeSpan.className = "accordion-badge";
-      badgeSpan.textContent = hasErrors ? "⚠️" : "✅";
+      badgeSpan.textContent = hasErrors ? "❌" : (hasWarnings ? "⚠️" : "✅");
+      badgeSpan.title = hasErrors
+        ? `Errors:\n${getChartErrors(chart).join("\n")}`
+        : (hasWarnings ? "Missing A+ Draft URL (A new draft will be created automatically)" : "Valid");
 
       accHeader.append(leftDiv, badgeSpan);
 
@@ -1549,6 +1554,48 @@ document.addEventListener("DOMContentLoaded", () => {
         actions.appendChild(exportBtn);
       }
 
+      if (entry.type === "run") {
+        const exportCsvBtn = document.createElement("button");
+        exportCsvBtn.className = "history-action-btn";
+        exportCsvBtn.innerHTML = "📊 Export CSV";
+        exportCsvBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (entry.runSummary && entry.runSummary.processedCharts) {
+            let csvContent = "\uFEFF"; // UTF-8 BOM
+            csvContent +=
+              "Chart Name,Original A+ Draft Link,Modified Preview Link\n";
+            entry.runSummary.processedCharts.forEach((c) => {
+              const name = `"${(c.name || "").replace(/"/g, '""')}"`;
+              const draft = `"${(c.draftUrl || "").replace(/"/g, '""')}"`;
+              const preview = `"${(c.previewUrl || "").replace(/"/g, '""')}"`;
+              csvContent += `${name},${draft},${preview}\n`;
+            });
+
+            const now = new Date(entry.timestamp);
+            const yy = String(now.getFullYear()).slice(-2);
+            const dd = String(now.getDate()).padStart(2, "0");
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const hh = String(now.getHours()).padStart(2, "0");
+            const min = String(now.getMinutes()).padStart(2, "0");
+
+            const blob = new Blob([csvContent], {
+              type: "text/csv;charset=utf-8;",
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute(
+              "download",
+              `APlus_Chart_Run_${yy}${dd}${mm}_${hh}${min}.csv`,
+            );
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        });
+        actions.appendChild(exportCsvBtn);
+      }
+
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "history-action-btn danger";
       deleteBtn.innerHTML = "🗑 Delete";
@@ -1584,7 +1631,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Validation Logic ---
   function getChartErrors(chart) {
     const errors = [];
-    if (!chart.draftUrl) errors.push("Missing A+ Draft URL");
+    // We no longer treat a missing draft URL as a blocking error, as we can automatically create a new draft.
 
     if (!chart.asins || chart.asins.length === 0) {
       errors.push("Missing ASINs");
@@ -1600,10 +1647,33 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    if (chart.attributes && chart.attributes.length > 10) {
-      errors.push(
-        `Too many metric rows (${chart.attributes.length}). Max is 10.`,
-      );
+    if (chart.titles) {
+      chart.titles.forEach((title, idx) => {
+        if (title && title.length > 80) {
+          errors.push(
+            `Product Title at position ${idx + 1} exceeds 80 characters (current: ${title.length}).`,
+          );
+        }
+      });
+    }
+
+    if (chart.attributes) {
+      if (chart.attributes.length > 10) {
+        errors.push(
+          `Too many metric rows (${chart.attributes.length}). Max is 10.`,
+        );
+      }
+      chart.attributes.forEach((attr, rIdx) => {
+        if (attr.values) {
+          attr.values.forEach((val, cIdx) => {
+            if (val && val.length > 250) {
+              errors.push(
+                `Metric "${attr.name || 'Row ' + (rIdx + 1)}" value at position ${cIdx + 1} exceeds 250 characters (current: ${val.length}).`,
+              );
+            }
+          });
+        }
+      });
     }
     return errors;
   }
@@ -1643,6 +1713,7 @@ document.addEventListener("DOMContentLoaded", () => {
           chartErrors.forEach((err) => {
             const li = document.createElement("li");
             li.textContent = prefix + err;
+            li.style.color = "#ef4444"; // Red for blocking errors
             validationList.appendChild(li);
           });
         }
@@ -1653,10 +1724,19 @@ document.addEventListener("DOMContentLoaded", () => {
       parsedData.forEach((chart, index) => {
         if (accordions[index]) {
           const hasErrors = errorsCache[index].length > 0; // reuse cached result
+          const hasWarnings = !chart.draftUrl;
+
           accordions[index].classList.toggle("has-errors", hasErrors);
-          accordions[index].classList.toggle("is-valid", !hasErrors);
+          accordions[index].classList.toggle("has-warnings", !hasErrors && hasWarnings);
+          accordions[index].classList.toggle("is-valid", !hasErrors && !hasWarnings);
+
           const badge = accordions[index].querySelector(".accordion-badge");
-          if (badge) badge.textContent = hasErrors ? "⚠️" : "✅";
+          if (badge) {
+            badge.textContent = hasErrors ? "❌" : (hasWarnings ? "⚠️" : "✅");
+            badge.title = hasErrors
+              ? `Errors:\n${errorsCache[index].join("\n")}`
+              : (hasWarnings ? "Missing A+ Draft URL (A new draft will be created automatically)" : "Valid");
+          }
         }
       });
     }
@@ -1754,7 +1834,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const isFinished =
-        message.progress === 100 ||
+        message.status.includes("All charts processed!") ||
         message.status.includes("Stopped") ||
         message.status.includes("Error:") ||
         message.status.toLowerCase().includes("failed");
@@ -1791,6 +1871,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const processed = res.processedCharts || [];
       if (processed.length === 0) return;
 
+      // Sync automatically created draft URLs to in-memory parsedData and update accordion UI inputs
+      processed.forEach((procChart) => {
+        const matchingIndex = parsedData.findIndex(c => c.name === procChart.name);
+        if (matchingIndex !== -1) {
+          const matchingChart = parsedData[matchingIndex];
+          matchingChart.draftUrl = procChart.draftUrl;
+          matchingChart.previewUrl = procChart.previewUrl;
+
+          const accordions = previewContainer.querySelectorAll(".chart-accordion");
+          if (accordions[matchingIndex]) {
+            const acc = accordions[matchingIndex];
+            const urlInput = acc.querySelector(".input-url");
+            if (urlInput) {
+              urlInput.value = procChart.draftUrl || "";
+            }
+            const previewEl = acc.querySelector(".preview-link-display");
+            if (previewEl) {
+              if (procChart.previewUrl) {
+                previewEl.href = procChart.previewUrl;
+                previewEl.style.display = "inline";
+              } else {
+                previewEl.style.display = "none";
+              }
+            }
+          }
+        }
+      });
+
       // Save to history
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], {
@@ -1814,6 +1922,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const resultsList = document.getElementById("resultsList");
       if (resultsList) {
         resultsList.textContent = "";
+
+        // Check if any processed chart has a limit error
+        const limitReachedCharts = processed.filter(c => c.error && c.error.includes("Limit reached: Max 5 modules"));
+        if (limitReachedCharts.length > 0) {
+          const banner = document.createElement("div");
+          banner.style.background = "#fff3cd";
+          banner.style.border = "1px solid #ffeeba";
+          banner.style.color = "#856404";
+          banner.style.padding = "10px";
+          banner.style.borderRadius = "4px";
+          banner.style.marginBottom = "10px";
+          banner.style.fontSize = "12px";
+          banner.style.fontWeight = "500";
+          banner.style.display = "flex";
+          banner.style.alignItems = "center";
+          banner.style.gap = "8px";
+
+          const iconSpan = document.createElement("span");
+          iconSpan.style.fontSize = "16px";
+          iconSpan.textContent = "⚠️";
+
+          const textSpan = document.createElement("span");
+          textSpan.textContent = `Notice: ${limitReachedCharts.length} chart(s) could not be populated because the target A+ draft already has the maximum limit of 5 modules.`;
+
+          banner.append(iconSpan, textSpan);
+          resultsList.appendChild(banner);
+        }
+
         processed.forEach((chart) => {
           const item = document.createElement("div");
           item.className = "processed-chart-item";
@@ -1829,28 +1965,58 @@ document.addEventListener("DOMContentLoaded", () => {
           titleDiv.style.color = "#2c3e50";
           titleDiv.textContent = chart.name;
 
-          const linksDiv = document.createElement("div");
-          linksDiv.style.marginTop = "4px";
-          linksDiv.style.fontSize = "11px";
+          item.appendChild(titleDiv);
 
-          const previewA = document.createElement("a");
-          previewA.href = chart.previewUrl || "#";
-          previewA.target = "_blank";
-          previewA.style.color = "#1f497d";
-          previewA.style.fontWeight = "500";
-          previewA.style.textDecoration = "underline";
-          previewA.style.marginRight = "10px";
-          previewA.textContent = "👁 Preview";
+          if (chart.error) {
+            item.style.borderLeft = "4px solid #e74c3c";
+            const errorDiv = document.createElement("div");
+            errorDiv.style.color = "#e74c3c";
+            errorDiv.style.fontWeight = "500";
+            errorDiv.style.marginTop = "4px";
+            errorDiv.style.fontSize = "11px";
+            errorDiv.textContent = `❌ Error: ${chart.error}`;
+            item.appendChild(errorDiv);
 
-          const draftA = document.createElement("a");
-          draftA.href = chart.draftUrl || "#";
-          draftA.target = "_blank";
-          draftA.style.color = "#555";
-          draftA.style.textDecoration = "underline";
-          draftA.textContent = "🔗 Draft Link";
+            // Add draft link anyway if it exists so they can check it
+            if (chart.draftUrl) {
+              const draftDiv = document.createElement("div");
+              draftDiv.style.marginTop = "4px";
+              draftDiv.style.fontSize = "11px";
+              const draftA = document.createElement("a");
+              draftA.href = chart.draftUrl;
+              draftA.target = "_blank";
+              draftA.style.color = "#555";
+              draftA.style.textDecoration = "underline";
+              draftA.textContent = "🔗 View Draft";
+              draftDiv.appendChild(draftA);
+              item.appendChild(draftDiv);
+            }
+          } else {
+            item.style.borderLeft = "4px solid #2ecc71";
+            const linksDiv = document.createElement("div");
+            linksDiv.style.marginTop = "4px";
+            linksDiv.style.fontSize = "11px";
 
-          linksDiv.append(previewA, draftA);
-          item.append(titleDiv, linksDiv);
+            const previewA = document.createElement("a");
+            previewA.href = chart.previewUrl || "#";
+            previewA.target = "_blank";
+            previewA.style.color = "#1f497d";
+            previewA.style.fontWeight = "500";
+            previewA.style.textDecoration = "underline";
+            previewA.style.marginRight = "10px";
+            previewA.textContent = "👁 Preview";
+
+            const draftA = document.createElement("a");
+            draftA.href = chart.draftUrl || "#";
+            draftA.target = "_blank";
+            draftA.style.color = "#555";
+            draftA.style.textDecoration = "underline";
+            draftA.textContent = "🔗 Draft Link";
+
+            linksDiv.append(previewA, draftA);
+            item.appendChild(linksDiv);
+          }
+
           resultsList.appendChild(item);
         });
       }

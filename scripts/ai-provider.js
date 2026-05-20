@@ -138,11 +138,11 @@ export const AIProvider = {
                     const asinStr = String(p.ASIN).trim();
                     asinProperties[asinStr] = {
                         type: "string",
-                        description: `Value of the comparison metric for ASIN ${asinStr}. Max 25 chars.`
+                        description: `Value of the comparison metric for ASIN ${asinStr}. Max 250 chars.`
                     };
                     shortTitleProperties[asinStr] = {
                         type: "string",
-                        description: `Concise product title for ASIN ${asinStr}. Max 75 chars.`
+                        description: `Concise product title for ASIN ${asinStr}. Max 80 chars.`
                     };
                     requiredAsins.push(asinStr);
                 }
@@ -164,7 +164,7 @@ export const AIProvider = {
                                     properties: asinProperties,
                                     required: requiredAsins,
                                     additionalProperties: false,
-                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 25 chars)."
+                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 250 chars)."
                                 }
                             },
                             required: ["metricName", "values"],
@@ -176,7 +176,7 @@ export const AIProvider = {
                         properties: shortTitleProperties,
                         required: requiredAsins,
                         additionalProperties: false,
-                        description: "A mapping from ASIN to a concise product title (max 75 chars). Strip SEO filler and brand repetition."
+                        description: "A mapping from ASIN to a concise product title (max 80 chars). Strip SEO filler and brand repetition."
                     }
                 },
                 required: ["metrics", "shortTitles"],
@@ -197,7 +197,7 @@ export const AIProvider = {
                                     type: "object",
                                     properties: asinProperties,
                                     required: requiredAsins,
-                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 25 chars)."
+                                    description: "A mapping from ASIN to the value for this metric. Use '✔' for checkmarks, or short text (max 250 chars)."
                                 }
                             },
                             required: ["metricName", "values"]
@@ -207,7 +207,7 @@ export const AIProvider = {
                         type: "object",
                         properties: shortTitleProperties,
                         required: requiredAsins,
-                        description: "A mapping from ASIN to a concise product title (max 75 chars). Strip SEO filler and brand repetition."
+                        description: "A mapping from ASIN to a concise product title (max 80 chars). Strip SEO filler and brand repetition."
                     }
                 },
                 required: ["metrics", "shortTitles"]

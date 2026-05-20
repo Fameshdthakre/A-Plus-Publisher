@@ -165,43 +165,64 @@
                                     Smart Auto-Map</button>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">ASIN</label>
+                                <label class="field-label">
+                                    <span>ASIN <span class="required-dot">*</span></span>
+                                    <span class="label-sub">Product code</span>
+                                </label>
                                 <select id="mapAsin" class="field-input" title="Map ASIN Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">Category</label>
+                                <label class="field-label">
+                                    <span>Category <span class="required-dot">*</span></span>
+                                    <span class="label-sub">Product niche</span>
+                                </label>
                                 <select id="mapCategory" class="field-input" title="Map Category Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">Title</label>
+                                <label class="field-label">
+                                    <span>Title <span class="required-dot">*</span></span>
+                                    <span class="label-sub">Product name</span>
+                                </label>
                                 <select id="mapTitle" class="field-input" title="Map Title Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">Bullets</label>
+                                <label class="field-label">
+                                    <span>Bullets <span class="required-dot">*</span></span>
+                                    <span class="label-sub">Key features</span>
+                                </label>
                                 <select id="mapBullets" class="field-input" title="Map Bullets Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">Description</label>
+                                <label class="field-label">
+                                    <span>Description <span class="required-dot">*</span></span>
+                                    <span class="label-sub">Detailed copy</span>
+                                </label>
                                 <select id="mapDesc" class="field-input" title="Map Description Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <div class="field-row">
-                                <label class="field-label">Specs</label>
+                                <label class="field-label">
+                                    <span>Specs</span>
+                                    <span class="label-sub">Technical details</span>
+                                </label>
                                 <select id="mapSpecs" class="field-input" title="Map Specs Column">
                                     <option value="">--Select--</option>
                                 </select>
                             </div>
                             <button id="generateChartBtn" class="btn-primary mt-1">Analyze
                                 Opportunities</button>
+                            <div id="aiMappingValidationHelper" class="validation-helper-text">
+                                <span>⚠️ Map ASIN, Category, Title, Bullets, & Description to proceed</span>
+                            </div>
                             <div id="aiProgressContainer" class="ai-progress-container hidden">
                                 <div class="step-text" id="aiProgressText">Analyzing product data...</div>
                             </div>
@@ -219,9 +240,9 @@
                                 <span class="callout-icon large-emoji">💡</span>
                                 <span id="aiOppText" class="font-semibold">Found opportunities!</span>
                             </div>
-                            <div class="flex-center-gap" style="margin-bottom: 1rem;">
+                            <div class="flex-center-gap mb-1">
                                 <button id="aiToggleSelectAllBtn" class="btn-text" type="button">☑ Select All</button>
-                                <div style="flex: 1;"></div>
+                                <div class="flex-spacer"></div>
                                 <button id="exportOppBtn" class="btn-secondary" type="button">📤 Export Groups
                                     JSON</button>
                             </div>
@@ -333,7 +354,7 @@
         </main>
 
         <footer>
-            <p>&copy; 2026 Antigravity Labs</p>
+            <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" rel="noopener">TransFamesh</a></strong>.</div>
         </footer>
     </div>
     <script type="module" src="sidepanel.js"></script>
