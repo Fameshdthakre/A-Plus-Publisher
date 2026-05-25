@@ -1,0 +1,792 @@
+{
+  "3p-module-b": [
+    {
+      "id": "header-top",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "main-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "text",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "launchpad-company-logo": [
+    {
+      "id": "companyLogo",
+      "key": "image",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Image"
+    }
+  ],
+  "module-4": [
+    {
+      "id": "module-title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block1-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block1-title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block1-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block2-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block2-title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block2-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block3-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block3-title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block3-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block4-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block4-title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block4-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-10": [
+    {
+      "id": "block1-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block1-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block1-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block3-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block3-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block3-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block2-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block2-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block2-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "block4-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "block4-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "block4-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-11": [
+    {
+      "id": "title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Background image"
+    }
+  ],
+  "module-12": [
+    {
+      "id": "title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Background image"
+    }
+  ],
+  "module-6": [
+    {
+      "id": "image1",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "title1",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description1",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Description"
+    },
+    {
+      "id": "caption1",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Image Caption"
+    },
+    {
+      "id": "image2",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "caption2",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Image Caption"
+    },
+    {
+      "id": "image3",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "caption3",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Image Caption"
+    },
+    {
+      "id": "image4",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "caption4",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Image Caption"
+    }
+  ],
+  "launchpad-brand-description-left": [
+    {
+      "id": "body",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-8": [
+    {
+      "id": "main-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description-subheader1",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description1",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "description-subheader2",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description2",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "description-subheader3",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description3",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "techspecs-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "list",
+      "key": "list",
+      "type": "list",
+      "maxLength": null,
+      "label": ""
+    }
+  ],
+  "module-1": [
+    {
+      "id": "main-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "main-image-caption",
+      "key": "header",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image Caption"
+    },
+    {
+      "id": "header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "sub-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "list",
+      "key": "list",
+      "type": "list",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "about-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "about-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "about-description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "list2",
+      "key": "list",
+      "type": "list",
+      "maxLength": null,
+      "label": ""
+    }
+  ],
+  "module-7": [
+    {
+      "id": "header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "main-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "description-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description-subheader1",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description1",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "description-subheader2",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "description2",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "techspecs-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "techspecs-list-subheader",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "list",
+      "key": "list",
+      "type": "list",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "techspecs-subheader1",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Subheadline"
+    },
+    {
+      "id": "techspecs-description1",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-2": [
+    {
+      "id": "image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-3": [
+    {
+      "id": "title",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    }
+  ],
+  "module-16-tech-specs": [
+    {
+      "id": "tech-specs-heading",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "tech-specs",
+      "key": "collection",
+      "type": "collection",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "spec-key",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Specification"
+    },
+    {
+      "id": "spec-value",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Definition"
+    }
+  ],
+  "basic-module-13-text": [
+    {
+      "id": "heading",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-9": [
+    {
+      "id": "header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "section1-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "section1-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description1",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "section2-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "section2-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description2",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    },
+    {
+      "id": "section3-image",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "section3-header",
+      "key": "header",
+      "type": "text",
+      "maxLength": null,
+      "label": "Headline"
+    },
+    {
+      "id": "description3",
+      "key": "paragraph",
+      "type": "unknown",
+      "maxLength": null,
+      "label": "Body text"
+    }
+  ],
+  "module-5": [
+    {
+      "id": "comparison",
+      "key": "chart",
+      "type": "chart",
+      "maxLength": null,
+      "label": ""
+    },
+    {
+      "id": "product-image-1",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "product-image-2",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "product-image-3",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "product-image-4",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "product-image-5",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    },
+    {
+      "id": "product-image-6",
+      "key": "image",
+      "type": "image",
+      "maxLength": null,
+      "label": "Image"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { getModuleById } from "./modules.js";
+
 /**
  * SandboxRenderer
  * Emulates the official Amazon A+ Comparison Chart widget.
@@ -70,6 +72,12 @@ export const SandboxRenderer = {
     },
 
     renderDesktop(container, chart, onUpdateCell) {
+        const moduleId = chart.moduleId || "module-5";
+        if (moduleId !== "module-5") {
+            this.renderGenericModule(container, chart, onUpdateCell, "desktop");
+            return;
+        }
+
         const grid = document.createElement('div');
         grid.className = 'amazon-desktop-grid';
 
@@ -226,6 +234,12 @@ export const SandboxRenderer = {
     },
 
     renderMobile(container, chart, onUpdateCell) {
+        const moduleId = chart.moduleId || "module-5";
+        if (moduleId !== "module-5") {
+            this.renderGenericModule(container, chart, onUpdateCell, "mobile");
+            return;
+        }
+
         const swipe = document.createElement('div');
         swipe.className = 'amazon-mobile-swipe';
 
@@ -334,5 +348,255 @@ export const SandboxRenderer = {
         });
 
         container.appendChild(swipe);
+    },
+
+    renderGenericModule(container, chart, onUpdateCell, mode) {
+        const mod = getModuleById(chart.moduleId);
+        if (!mod) {
+            const errDiv = document.createElement('div');
+            errDiv.className = 'sandbox-error';
+            errDiv.style.color = 'var(--error)';
+            errDiv.style.padding = '10px';
+            errDiv.textContent = `Module type ${chart.moduleId} not found.`;
+            container.appendChild(errDiv);
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = `amazon-generic-preview ${mode}-view`;
+        wrapper.style.padding = mode === 'desktop' ? '15px' : '10px';
+        wrapper.style.border = '1px solid var(--border)';
+        wrapper.style.borderRadius = '8px';
+        wrapper.style.background = 'var(--bg-card)';
+        wrapper.style.marginTop = '10px';
+
+        const badge = document.createElement('div');
+        badge.style.display = 'inline-block';
+        badge.style.padding = '3px 8px';
+        badge.style.background = 'var(--bg-tag)';
+        badge.style.color = 'var(--primary)';
+        badge.style.borderRadius = '4px';
+        badge.style.fontSize = '11px';
+        badge.style.fontWeight = 'bold';
+        badge.style.marginBottom = '10px';
+        badge.textContent = `${mod.name} (${chart.moduleId})`;
+        wrapper.appendChild(badge);
+
+        const fieldsContainer = document.createElement('div');
+        fieldsContainer.className = 'preview-fields-layout';
+        fieldsContainer.style.display = 'flex';
+        fieldsContainer.style.flexDirection = 'column';
+        fieldsContainer.style.gap = '12px';
+
+        const createEditableText = (fieldKey, repeatIndex, initialVal, isTextarea, label) => {
+            const textSpan = document.createElement('div');
+            textSpan.className = 'editable-preview-text';
+            textSpan.style.cursor = 'pointer';
+            textSpan.style.minHeight = isTextarea ? '40px' : '20px';
+            textSpan.style.borderBottom = '1px dashed var(--border)';
+            textSpan.style.padding = '4px';
+            textSpan.style.borderRadius = '3px';
+            textSpan.style.whiteSpace = 'pre-wrap';
+            textSpan.style.fontSize = isTextarea ? '12px' : '13px';
+            if (!isTextarea) {
+                textSpan.style.fontWeight = label.toLowerCase().includes('header') || label.toLowerCase().includes('title') ? 'bold' : 'normal';
+            }
+
+            if (!String(initialVal || '').trim()) {
+                textSpan.style.color = 'var(--text-muted)';
+                textSpan.style.fontStyle = 'italic';
+                textSpan.textContent = `Click to edit ${label}...`;
+            } else {
+                textSpan.style.color = 'var(--text)';
+                textSpan.textContent = initialVal;
+            }
+
+            textSpan.addEventListener('click', () => {
+                const currentVal = textSpan.style.fontStyle === 'italic' ? '' : textSpan.textContent;
+                const input = document.createElement(isTextarea ? 'textarea' : 'input');
+                input.className = 'preview-edit-input';
+                input.value = currentVal;
+                input.style.width = '100%';
+                input.style.padding = '6px';
+                input.style.boxSizing = 'border-box';
+                input.style.border = '1px solid var(--primary)';
+                input.style.borderRadius = '4px';
+                input.style.background = 'var(--bg)';
+                input.style.color = 'var(--text)';
+                if (isTextarea) {
+                    input.style.minHeight = '65px';
+                    input.style.resize = 'vertical';
+                }
+
+                const finishEdit = () => {
+                    const newVal = input.value.trim();
+                    if (newVal !== currentVal) {
+                        onUpdateCell('field', fieldKey, repeatIndex, newVal);
+                    } else {
+                        if (!newVal) {
+                            textSpan.style.color = 'var(--text-muted)';
+                            textSpan.style.fontStyle = 'italic';
+                            textSpan.textContent = `Click to edit ${label}...`;
+                        } else {
+                            textSpan.style.color = 'var(--text)';
+                            textSpan.style.fontStyle = 'normal';
+                            textSpan.textContent = newVal;
+                        }
+                        input.replaceWith(textSpan);
+                    }
+                };
+
+                input.addEventListener('blur', finishEdit);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !isTextarea) {
+                        input.blur();
+                    }
+                    if (e.key === 'Escape') {
+                        input.value = currentVal;
+                        input.blur();
+                    }
+                });
+
+                textSpan.replaceWith(input);
+                input.focus();
+            });
+
+            return textSpan;
+        };
+
+        const hasRepeat = mod.fields.some(f => f.repeat && f.repeat > 1);
+
+        if (hasRepeat) {
+            const maxRepeat = Math.max(...mod.fields.map(f => f.repeat || 1));
+            
+            mod.fields.forEach(field => {
+                if (!field.repeat || field.repeat <= 1) {
+                    const fDiv = document.createElement('div');
+                    fDiv.style.marginBottom = '8px';
+                    
+                    const fLabel = document.createElement('div');
+                    fLabel.style.fontSize = '10px';
+                    fLabel.style.color = 'var(--text-muted)';
+                    fLabel.style.fontWeight = 'bold';
+                    fLabel.style.textTransform = 'uppercase';
+                    fLabel.textContent = field.label;
+                    fDiv.appendChild(fLabel);
+
+                    if (field.type === 'image') {
+                        const imgBox = document.createElement('div');
+                        imgBox.style.height = '50px';
+                        imgBox.style.background = 'var(--bg)';
+                        imgBox.style.border = '1px dashed var(--border)';
+                        imgBox.style.display = 'flex';
+                        imgBox.style.alignItems = 'center';
+                        imgBox.style.justifyContent = 'center';
+                        imgBox.style.color = 'var(--text-muted)';
+                        imgBox.style.fontSize = '11px';
+                        imgBox.textContent = `📷 ${field.label} placeholder`;
+                        fDiv.appendChild(imgBox);
+                    } else {
+                        const val = chart.fields[field.key] || '';
+                        fDiv.appendChild(createEditableText(field.key, null, val, field.type === 'textarea', field.label));
+                    }
+                    fieldsContainer.appendChild(fDiv);
+                }
+            });
+
+            const gridDiv = document.createElement('div');
+            gridDiv.style.display = 'grid';
+            gridDiv.style.gridTemplateColumns = mode === 'desktop' ? `repeat(${Math.min(maxRepeat, 4)}, 1fr)` : '1fr';
+            gridDiv.style.gap = '12px';
+
+            for (let i = 0; i < maxRepeat; i++) {
+                const colDiv = document.createElement('div');
+                colDiv.style.border = '1px solid var(--border)';
+                colDiv.style.borderRadius = '6px';
+                colDiv.style.padding = '8px';
+                colDiv.style.background = 'var(--bg)';
+
+                const blockTitle = document.createElement('div');
+                blockTitle.style.fontSize = '11px';
+                blockTitle.style.fontWeight = 'bold';
+                blockTitle.style.color = 'var(--primary)';
+                blockTitle.style.marginBottom = '6px';
+                blockTitle.textContent = `Block ${i + 1}`;
+                colDiv.appendChild(blockTitle);
+
+                mod.fields.forEach(field => {
+                    if (field.repeat && field.repeat > 1) {
+                        const fDiv = document.createElement('div');
+                        fDiv.style.marginBottom = '6px';
+
+                        if (field.type === 'image') {
+                            const imgBox = document.createElement('div');
+                            imgBox.style.height = '80px';
+                            imgBox.style.background = 'var(--bg-card)';
+                            imgBox.style.border = '1px dashed var(--border)';
+                            imgBox.style.display = 'flex';
+                            imgBox.style.alignItems = 'center';
+                            imgBox.style.justifyContent = 'center';
+                            imgBox.style.color = 'var(--text-muted)';
+                            imgBox.style.fontSize = '10px';
+                            imgBox.style.marginBottom = '4px';
+                            imgBox.textContent = `📷 ${field.label}`;
+                            fDiv.appendChild(imgBox);
+                        } else {
+                            const valArray = chart.fields[field.key] || [];
+                            const val = valArray[i] || '';
+                            fDiv.appendChild(createEditableText(field.key, i, val, field.type === 'textarea', `${field.label} ${i + 1}`));
+                        }
+                        colDiv.appendChild(fDiv);
+                    }
+                });
+                gridDiv.appendChild(colDiv);
+            }
+            fieldsContainer.appendChild(gridDiv);
+        } else {
+            mod.fields.forEach(field => {
+                const fDiv = document.createElement('div');
+                fDiv.style.marginBottom = '8px';
+
+                const fLabel = document.createElement('div');
+                fLabel.style.fontSize = '10px';
+                fLabel.style.color = 'var(--text-muted)';
+                fLabel.style.fontWeight = 'bold';
+                fLabel.style.textTransform = 'uppercase';
+                fLabel.textContent = field.label;
+                fDiv.appendChild(fLabel);
+
+                if (field.type === 'image') {
+                    const imgBox = document.createElement('div');
+                    imgBox.style.height = '100px';
+                    imgBox.style.background = 'var(--bg)';
+                    imgBox.style.border = '1px dashed var(--border)';
+                    imgBox.style.display = 'flex';
+                    imgBox.style.alignItems = 'center';
+                    imgBox.style.justifyContent = 'center';
+                    imgBox.style.color = 'var(--text-muted)';
+                    imgBox.style.fontSize = '11px';
+                    imgBox.textContent = `📷 Image Box (${field.label})`;
+                    fDiv.appendChild(imgBox);
+                } else if (field.type === 'boolean') {
+                    const val = !!chart.fields[field.key];
+                    const toggleSpan = document.createElement('span');
+                    toggleSpan.textContent = val ? 'ON ✅' : 'OFF ❌';
+                    toggleSpan.style.cursor = 'pointer';
+                    toggleSpan.style.fontSize = '11px';
+                    toggleSpan.style.fontWeight = 'bold';
+                    toggleSpan.addEventListener('click', () => {
+                        onUpdateCell('field', field.key, null, !val);
+                    });
+                    fDiv.appendChild(toggleSpan);
+                } else {
+                    const val = chart.fields[field.key] || '';
+                    fDiv.appendChild(createEditableText(field.key, null, val, field.type === 'textarea', field.label));
+                }
+
+                fieldsContainer.appendChild(fDiv);
+            });
+        }
+
+        wrapper.appendChild(fieldsContainer);
+        container.appendChild(wrapper);
     }
 };

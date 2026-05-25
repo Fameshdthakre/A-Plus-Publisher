@@ -3,6 +3,7 @@
 import { setupAIGenerator } from "../scripts/ai-generator.js";
 import { HistoryManager } from "../scripts/history.js";
 import { SandboxRenderer } from "../scripts/sandbox-renderer.js";
+import { MODULE_REGISTRY, getAIReadyModules, getTemplateHeaders, getModuleById, MAX_MODULES_PER_DRAFT } from "../scripts/modules.js";
 
 // Mock Chrome Extension APIs if running in normal web page for local testing/preview
 if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
@@ -29,14 +30,24 @@ if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
   };
 }
 
-function sanitizeHTML(str) {
-  if (!str) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+/**
+ * M5: Builds a preview URL from a draft URL, auto-detecting Vendor vs Seller Central.
+ * Supports both domains since the user works with both.
+ */
+function buildPreviewUrl(draftUrl) {
+  if (!draftUrl) return "";
+  const match = draftUrl.match(/\/content\/([a-f0-9\-]{36})/i);
+  if (!match || !match[1]) return "";
+  
+  try {
+    const parsed = new URL(draftUrl);
+    return `https://${parsed.host}/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
+  } catch (e) {
+    const domain = draftUrl.includes("vendorcentral")
+      ? "vendorcentral.amazon.com"
+      : "sellercentral.amazon.com";
+    return `https://${domain}/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -61,6 +72,45 @@ document.addEventListener("DOMContentLoaded", () => {
     downloadAllChartsBtn.addEventListener("click", () => {
       downloadAllChartsAsExcel(parsedData);
     });
+  }
+
+  // --- Feedback Button Handler ---
+  const feedbackBtn = document.getElementById("btn-feedback");
+  if (feedbackBtn) {
+    feedbackBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const manifest = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest)
+        ? chrome.runtime.getManifest()
+        : { name: "A-Plus Publisher Pro", version: "1.0.0" };
+      let appName = manifest.name;
+      if (typeof chrome !== "undefined" && chrome.i18n && chrome.i18n.getMessage) {
+        const i18nName = chrome.i18n.getMessage("appName");
+        if (i18nName) appName = i18nName;
+      }
+      const version = `${appName} ${manifest.version}`;
+      const baseUrl =
+        "https://docs.google.com/forms/d/e/1FAIpQLSeZ4zNH3_Jiov3JnTa5K2VXffCCkDSsh-KvK_h3kIxmbejoIg/viewform";
+      const versionFieldId = "entry.2030262534";
+      const params = new URLSearchParams();
+      params.append("usp", "pp_url");
+      if (versionFieldId) params.append(versionFieldId, version);
+      const finalUrl = `${baseUrl}?${params.toString()}`;
+      
+      if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+        chrome.tabs.create({ url: finalUrl });
+      } else {
+        window.open(finalUrl, "_blank");
+      }
+    });
+  }
+
+  // --- Version Badge Logic ---
+  const versionBadge = document.getElementById("app-version-badge");
+  if (versionBadge) {
+    const manifest = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest)
+      ? chrome.runtime.getManifest()
+      : { version: "1.0.0" };
+    versionBadge.textContent = `v${manifest.version}`;
   }
 
   // --- Amazon Preview Sandbox Global Toggles ---
@@ -99,6 +149,197 @@ document.addEventListener("DOMContentLoaded", () => {
       activeTabContent = target;
     });
   });
+
+  // ─── Module Picker Grid (Publisher tab, multi-select up to 5) ───
+  const modulePickerGrid = document.getElementById("modulePickerGrid");
+  const moduleCountBadge = document.getElementById("moduleCountBadge");
+  let selectedModuleIds = [];
+  let currentMaxModules = MAX_MODULES_PER_DRAFT;
+
+  const overrideLimitToggle = document.getElementById("overrideLimitToggle");
+  if (overrideLimitToggle) {
+    overrideLimitToggle.addEventListener("change", (e) => {
+      currentMaxModules = e.target.checked ? 99 : MAX_MODULES_PER_DRAFT;
+      
+      // If turning limit back on, trim selected modules to valid limits
+      if (!e.target.checked) {
+        let validIds = [];
+        let counts = {};
+        for (let id of selectedModuleIds) {
+          counts[id] = (counts[id] || 0) + 1;
+          const mod = getModuleById(id);
+          const modMax = mod ? (mod.maxPerDraft || 5) : 5;
+          if (counts[id] <= modMax && validIds.length < MAX_MODULES_PER_DRAFT) {
+            validIds.push(id);
+          }
+        }
+        selectedModuleIds = validIds;
+      }
+      
+      updateModulePickerState();
+    });
+  }
+
+  function renderModulePicker() {
+    if (!modulePickerGrid) return;
+    modulePickerGrid.textContent = "";
+
+    MODULE_REGISTRY.forEach((mod) => {
+      const card = document.createElement("div");
+      card.className = "module-picker-card";
+      card.dataset.moduleId = mod.id;
+      card.setAttribute("tabindex", "0");
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-label", `Toggle selection for module ${mod.name}`);
+      if (selectedModuleIds.includes(mod.id)) card.classList.add("selected");
+
+      // Check mark
+      const check = document.createElement("div");
+      check.className = "module-check";
+      check.textContent = "✓";
+      card.appendChild(check);
+
+      // AI badge
+      if (mod.aiReady) {
+        const aiBadge = document.createElement("div");
+        aiBadge.className = "module-ai-badge";
+        aiBadge.textContent = "AI";
+        card.appendChild(aiBadge);
+      }
+
+      // Thumbnail
+      const img = document.createElement("img");
+      img.className = "module-thumb";
+      img.src = mod.thumbnail;
+      img.alt = mod.name;
+      img.loading = "lazy";
+      card.appendChild(img);
+
+      // Label
+      const label = document.createElement("div");
+      label.className = "module-label";
+      label.textContent = mod.shortName;
+      card.appendChild(label);
+
+      card.addEventListener("click", () => {
+        const currentCount = selectedModuleIds.filter((id) => id === mod.id).length;
+        if (currentCount > 0) {
+          // Deselect all instances of this module
+          selectedModuleIds = selectedModuleIds.filter((id) => id !== mod.id);
+        } else if (selectedModuleIds.length < currentMaxModules) {
+          // Select: add first instance
+          selectedModuleIds.push(mod.id);
+        }
+        updateModulePickerState();
+      });
+
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          card.click();
+        }
+      });
+
+      modulePickerGrid.appendChild(card);
+    });
+
+    updateModulePickerState();
+  }
+
+  function updateModulePickerState() {
+    const count = selectedModuleIds.length;
+    if (moduleCountBadge) {
+      moduleCountBadge.textContent = `${count} / ${currentMaxModules === 99 ? '∞' : currentMaxModules} selected`;
+    }
+
+    const cards = modulePickerGrid.querySelectorAll(".module-picker-card");
+    cards.forEach((card) => {
+      const id = card.dataset.moduleId;
+      const mod = getModuleById(id);
+      const currentCount = selectedModuleIds.filter((x) => x === id).length;
+      const isSelected = currentCount > 0;
+
+      const modMax = currentMaxModules === 99 ? 99 : (mod ? (mod.maxPerDraft || 5) : 5);
+      const isModuleMaxReached = currentCount >= modMax;
+      const isGlobalMaxReached = count >= currentMaxModules;
+      const cannotIncrement = isModuleMaxReached || isGlobalMaxReached;
+
+      card.classList.toggle("selected", isSelected);
+      card.classList.toggle("max-reached", !isSelected && cannotIncrement);
+
+      // Handle multi-instance counter controls
+      if (isSelected && mod && (mod.maxPerDraft > 1 || currentMaxModules === 99)) {
+        let controls = card.querySelector(".module-controls");
+        if (!controls) {
+          controls = document.createElement("div");
+          controls.className = "module-controls";
+
+          const minusBtn = document.createElement("button");
+          minusBtn.className = "control-btn minus-btn";
+          minusBtn.textContent = "−";
+          minusBtn.title = "Decrease count";
+          minusBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = selectedModuleIds.indexOf(id);
+            if (idx !== -1) {
+              selectedModuleIds.splice(idx, 1);
+              updateModulePickerState();
+            }
+          });
+
+          const countSpan = document.createElement("span");
+          countSpan.className = "control-count";
+
+          const plusBtn = document.createElement("button");
+          plusBtn.className = "control-btn plus-btn";
+          plusBtn.textContent = "+";
+          plusBtn.title = "Increase count";
+          plusBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (selectedModuleIds.length < currentMaxModules) {
+              const curr = selectedModuleIds.filter((x) => x === id).length;
+              const mMax = currentMaxModules === 99 ? 99 : (mod.maxPerDraft || 5);
+              if (curr < mMax) {
+                selectedModuleIds.push(id);
+                updateModulePickerState();
+              }
+            }
+          });
+
+          controls.append(minusBtn, countSpan, plusBtn);
+          card.appendChild(controls);
+        }
+
+        const countSpan = controls.querySelector(".control-count");
+        countSpan.textContent = `${currentCount}x`;
+
+        const minusBtn = controls.querySelector(".minus-btn");
+        const plusBtn = controls.querySelector(".plus-btn");
+        plusBtn.disabled = cannotIncrement;
+      } else {
+        const controls = card.querySelector(".module-controls");
+        if (controls) {
+          controls.remove();
+        }
+      }
+    });
+  }
+
+  renderModulePicker();
+
+  // ─── AI Module Type Dropdown (single-select, AI-ready only) ────
+  const aiModuleTypeSelect = document.getElementById("aiModuleTypeSelect");
+  if (aiModuleTypeSelect) {
+    const aiModules = getAIReadyModules();
+    // Default to Comparison Chart (module-5) if available
+    aiModules.forEach((mod) => {
+      const opt = document.createElement("option");
+      opt.value = mod.id;
+      opt.textContent = mod.name;
+      if (mod.id === "module-5") opt.selected = true;
+      aiModuleTypeSelect.appendChild(opt);
+    });
+  }
 
   // --- History Tab UI Listeners ---
   const historyTabBtn = document.querySelector('[data-target="tab-history"]');
@@ -239,29 +480,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const styles = {
       docTitle: {
         font: { bold: true, sz: 14, color: { rgb: "1F497D" } },
-        border: {
-          top: { style: "none" },
-          bottom: { style: "none" },
-          left: { style: "none" },
-          right: { style: "none" },
-        },
+        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
       },
       docSub: {
         font: { italic: true, sz: 10, color: { rgb: "555555" } },
-        border: {
-          top: { style: "none" },
-          bottom: { style: "none" },
-          left: { style: "none" },
-          right: { style: "none" },
-        },
+        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
       },
       docEmpty: {
-        border: {
-          top: { style: "none" },
-          bottom: { style: "none" },
-          left: { style: "none" },
-          right: { style: "none" },
-        },
+        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
       },
       tblHeader: {
         font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
@@ -293,219 +519,116 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     };
 
-    const instructionsData = [
-      [
-        makeCell(
-          "A+ Comparison Chart Builder - Documentation & Instructions",
-          styles.docTitle,
-        ),
-        makeCell("", styles.docEmpty),
-      ],
-      [
-        makeCell(
-          "This sheet explains all rules, features, and settings for comparison chart automation.",
-          styles.docSub,
-        ),
-        makeCell("", styles.docEmpty),
-      ],
-      [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
-      [
-        makeCell("Feature / Configuration", styles.tblHeader),
-        makeCell("Instructions & Practical Guidelines", styles.tblHeader),
-      ],
-      [
-        makeCell("A+ Content Title", styles.sideLabel),
-        makeCell(
-          "Optional. Enter the overall title/name of your A+ Content project.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("A+ Draft URL", styles.sideLabel),
-        makeCell(
-          "Paste the full Amazon A+ Content Draft URL in cell B3.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("ASIN", styles.sideLabel),
-        makeCell(
-          "Strictly required. Row 4 contains the ASIN (10-character Amazon Identifier).",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("Highlight Column", styles.sideLabel),
-        makeCell(
-          "Set exactly one column to TRUE (usually Base Product) and others to FALSE.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("Toggles: Reviews, Prices, Cart", styles.sideLabel),
-        makeCell(
-          "Set 'Show Reviews', 'Show Prices', and 'Show Add To Cart Button' to TRUE or FALSE.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("Title", styles.sideLabel),
-        makeCell(
-          "Strictly required. The display names/titles of your products.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("Comparison Metrics", styles.sideLabel),
-        makeCell(
-          "Rows 9+ represent comparison features. Up to 10 allowed.",
-          styles.descText,
-        ),
-      ],
-      [
-        makeCell("Checkmarks & Icons", styles.sideLabel),
-        makeCell(
-          "Green checkmark: 'True', 'Check', '✔', or '✓'.\nEmpty circle: 'False', or 'N'.\nText values: 'Yes', 'No', 'X', or any other text.",
-          styles.descText,
-        ),
-      ],
-    ];
-
-    const chartData = [
-      [
-        makeCell("Label / Attribute", styles.tblHeader),
-        makeCell("Base Product", styles.tblHeader),
-        makeCell("Competitor 1", styles.tblHeader),
-        makeCell("Competitor 2", styles.tblHeader),
-        makeCell("Competitor 3", styles.tblHeader),
-        makeCell("Competitor 4", styles.tblHeader),
-        makeCell("Competitor 5", styles.tblHeader),
-      ],
-      [
-        makeCell("A+ Content Title", styles.sideLabel),
-        makeCell("My Premium Comparison Chart", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-      ],
-      [
-        makeCell("A+ Draft URL", styles.sideLabel),
-        makeCell(
-          "https://sellercentral.amazon.com/aplus/edit/...",
-          styles.configVal,
-        ),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-        makeCell("", styles.configVal),
-      ],
-      [
-        makeCell("ASIN", styles.sideLabel),
-        makeCell("B0XXXXXXXX", styles.highlightCol),
-        makeCell("B0YYYYYYYY", styles.normalCol),
-        makeCell("B0ZZZZZZZZ", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Highlight Column", styles.sideLabel),
-        makeCell("TRUE", styles.highlightCol),
-        makeCell("FALSE", styles.normalCol),
-        makeCell("FALSE", styles.normalCol),
-        makeCell("FALSE", styles.normalCol),
-        makeCell("FALSE", styles.normalCol),
-        makeCell("FALSE", styles.normalCol),
-      ],
-      [
-        makeCell("Show Reviews", styles.sideLabel),
-        makeCell("TRUE", styles.highlightCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Show Prices", styles.sideLabel),
-        makeCell("TRUE", styles.highlightCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Show Add To Cart Button", styles.sideLabel),
-        makeCell("TRUE", styles.highlightCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Title", styles.sideLabel),
-        makeCell("Your Main Product", styles.highlightCol),
-        makeCell("Competitor A", styles.normalCol),
-        makeCell("Competitor B", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Customer Rating", styles.sideLabel),
-        makeCell("4.8", styles.highlightCol),
-        makeCell("4.2", styles.normalCol),
-        makeCell("4.5", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Warranty", styles.sideLabel),
-        makeCell("2 Years", styles.highlightCol),
-        makeCell("1 Year", styles.normalCol),
-        makeCell("6 Months", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-      [
-        makeCell("Waterproof", styles.sideLabel),
-        makeCell("Yes", styles.highlightCol),
-        makeCell("No", styles.normalCol),
-        makeCell("Yes", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-        makeCell("", styles.normalCol),
-      ],
-    ];
+    // Determine which modules to generate templates for
+    const modulesToGenerate = selectedModuleIds.length > 0
+      ? selectedModuleIds.map(id => getModuleById(id)).filter(Boolean)
+      : [getModuleById("module-5")]; // Default: Comparison Chart
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(chartData);
-    worksheet["!cols"] = [
-      { wch: 25 },
-      { wch: 30 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-    ];
-    const instrSheet = XLSX.utils.aoa_to_sheet(instructionsData);
-    instrSheet["!cols"] = [{ wch: 25 }, { wch: 75 }];
-    worksheet["!views"] = [{ showGridLines: true }];
-    instrSheet["!views"] = [{ showGridLines: true }];
 
+    // Instructions sheet
+    const instrData = [
+      [makeCell("A+ Publisher Pro - Template Instructions", styles.docTitle), makeCell("", styles.docEmpty)],
+      [makeCell("Each sheet tab represents one A+ module. Fill in the values and import the file back into the extension.", styles.docSub), makeCell("", styles.docEmpty)],
+      [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
+      [makeCell("Field", styles.tblHeader), makeCell("Instructions", styles.tblHeader)],
+      [makeCell("A+ Content Title", styles.sideLabel), makeCell("Optional. Name of your A+ Content project.", styles.descText)],
+      [makeCell("A+ Draft URL", styles.sideLabel), makeCell("Paste the full Amazon A+ Content Draft URL.", styles.descText)],
+      [makeCell("Module Type", styles.sideLabel), makeCell("Auto-filled. Do NOT change this value.", styles.descText)],
+      [makeCell("Image Fields", styles.sideLabel), makeCell("Image fields are listed for reference. Use the Amazon editor to upload images manually.", styles.descText)],
+      [makeCell("Text Fields", styles.sideLabel), makeCell("Fill in text values. Respect the character limits shown in parentheses.", styles.descText)],
+    ];
+    const instrSheet = XLSX.utils.aoa_to_sheet(instrData);
+    instrSheet["!cols"] = [{ wch: 25 }, { wch: 75 }];
     XLSX.utils.book_append_sheet(workbook, instrSheet, "Instructions");
-    XLSX.utils.book_append_sheet(workbook, worksheet, "A+ Comparison Chart");
-    XLSX.writeFile(workbook, "APlus_Comparison_Template.xlsx", {
-      bookType: "xlsx",
+
+    // Generate a sheet for each selected module
+    const usedNames = new Set(["Instructions"]);
+    modulesToGenerate.forEach((mod) => {
+      if (mod.id === "module-5") {
+        // Special: Comparison Chart uses the original columnar layout
+        const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "1F497D" } }, ...styles.docEmpty };
+        const chartData = [
+          [makeCell("Comparison Chart", titleStyle), makeCell("", styles.docEmpty), ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty))],
+          [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty), ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty))],
+          [makeCell("Label / Attribute", styles.tblHeader), makeCell("Base Product", styles.tblHeader), makeCell("Competitor 1", styles.tblHeader), makeCell("Competitor 2", styles.tblHeader), makeCell("Competitor 3", styles.tblHeader), makeCell("Competitor 4", styles.tblHeader), makeCell("Competitor 5", styles.tblHeader)],
+          [makeCell("Module Type", styles.sideLabel), makeCell("module-5", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
+          [makeCell("A+ Content Title", styles.sideLabel), makeCell("My Premium Comparison Chart", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
+          [makeCell("A+ Draft URL", styles.sideLabel), makeCell("https://sellercentral.amazon.com/aplus/edit/...", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
+          [makeCell("ASIN", styles.sideLabel), makeCell("B0XXXXXXXX", styles.highlightCol), makeCell("B0YYYYYYYY", styles.normalCol), makeCell("B0ZZZZZZZZ", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+          [makeCell("Highlight Column", styles.sideLabel), makeCell("TRUE", styles.highlightCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol)],
+          [makeCell("Show Reviews", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
+          [makeCell("Show Prices", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
+          [makeCell("Show Add To Cart Button", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
+          [makeCell("Title", styles.sideLabel), makeCell("Your Main Product", styles.highlightCol), makeCell("Competitor A", styles.normalCol), makeCell("Competitor B", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+          [makeCell("Customer Rating", styles.sideLabel), makeCell("4.8", styles.highlightCol), makeCell("4.2", styles.normalCol), makeCell("4.5", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+          [makeCell("Warranty", styles.sideLabel), makeCell("2 Years", styles.highlightCol), makeCell("1 Year", styles.normalCol), makeCell("6 Months", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+          [makeCell("Waterproof", styles.sideLabel), makeCell("Yes", styles.highlightCol), makeCell("No", styles.normalCol), makeCell("Yes", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(chartData);
+        ws["!cols"] = [{ wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+        const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+        ws["!dataValidation"] = [
+          { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` },
+          { sqref: "B8:G11", type: "list", allowBlank: true, formula1: '"TRUE,FALSE"' }
+        ];
+
+        const tabName = dedupeSheetName("Comparison Chart", usedNames);
+        XLSX.utils.book_append_sheet(workbook, ws, tabName);
+      } else {
+        // Generic module: vertical key/value layout
+        const rows = [
+          [makeCell(mod.name, styles.docTitle), makeCell("", styles.docEmpty)],
+          [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
+          [makeCell("Field", styles.tblHeader), makeCell("Value", styles.tblHeader)],
+          [makeCell("Module Type", styles.sideLabel), makeCell(mod.id, styles.configVal)],
+          [makeCell("A+ Content Title", styles.sideLabel), makeCell("", styles.configVal)],
+          [makeCell("A+ Draft URL", styles.sideLabel), makeCell("", styles.configVal)],
+        ];
+
+        // Add each field from the module schema
+        for (const field of mod.fields) {
+          const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+          if (field.repeat && field.repeat > 1) {
+            for (let i = 1; i <= field.repeat; i++) {
+              const label = `${field.label} ${i}${maxNote}`;
+              const placeholder = field.type === "image" ? "(upload in Amazon editor)" : "";
+              rows.push([makeCell(label, styles.sideLabel), makeCell(placeholder, styles.normalCol)]);
+            }
+          } else {
+            const label = `${field.label}${maxNote}`;
+            const placeholder = field.type === "image" ? "(upload in Amazon editor)" : "";
+            rows.push([makeCell(label, styles.sideLabel), makeCell(placeholder, styles.normalCol)]);
+          }
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws["!cols"] = [{ wch: 35 }, { wch: 60 }];
+
+        const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+        ws["!dataValidation"] = [
+          { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` }
+        ];
+
+        const tabName = dedupeSheetName(mod.shortName, usedNames);
+        XLSX.utils.book_append_sheet(workbook, ws, tabName);
+      }
     });
+
+    XLSX.writeFile(workbook, "APlus_Template.xlsx", { bookType: "xlsx" });
+  }
+
+  /** Ensures unique Excel sheet tab names (max 31 chars, no illegal chars) */
+  function dedupeSheetName(name, usedSet) {
+    let safe = name.replace(/[\\\/?*\[\]:]/g, "_").slice(0, 31);
+    let candidate = safe;
+    let counter = 2;
+    while (usedSet.has(candidate)) {
+      const suffix = ` (${counter++})`;
+      candidate = safe.slice(0, 31 - suffix.length) + suffix;
+    }
+    usedSet.add(candidate);
+    return candidate;
   }
 
   // Shared style constants for Excel chart sheets
@@ -542,77 +665,138 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function buildChartWorksheet(chart) {
     const styles = CHART_SHEET_STYLES;
-    const getColStyle = (colIdx) =>
-      chart.highlightColumn && chart.highlightColumn[colIdx]
-        ? styles.highlightCol
-        : styles.normalCol;
+    const moduleId = chart.moduleId || "module-5";
 
-    const headers = [
-      makeCell("Label / Attribute", styles.tblHeader),
-      makeCell("Base Product", styles.tblHeader),
-    ];
-    for (let i = 1; i < 6; i++) {
-      headers.push(makeCell(`Competitor ${i}`, styles.tblHeader));
+    if (moduleId === "module-5") {
+      const getColStyle = (colIdx) =>
+        chart.highlightColumn && chart.highlightColumn[colIdx]
+          ? styles.highlightCol
+          : styles.normalCol;
+
+      const headers = [
+        makeCell("Label / Attribute", styles.tblHeader),
+        makeCell("Base Product", styles.tblHeader),
+      ];
+      for (let i = 1; i < 6; i++) {
+        headers.push(makeCell(`Competitor ${i}`, styles.tblHeader));
+      }
+
+      const docEmpty = { border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } } };
+      const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "1F497D" } }, ...docEmpty };
+
+      const rows = [
+        [makeCell("Comparison Chart", titleStyle), makeCell("", docEmpty), ...Array.from({ length: 5 }, () => makeCell("", docEmpty))],
+        [makeCell("", docEmpty), makeCell("", docEmpty), ...Array.from({ length: 5 }, () => makeCell("", docEmpty))],
+        headers,
+        [
+          makeCell("Module Type", styles.sideLabel),
+          makeCell(moduleId, styles.configVal),
+          ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+        ],
+        [
+          makeCell("A+ Content Title", styles.sideLabel),
+          makeCell(chart.contentTitle || "", styles.configVal),
+          ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+        ],
+        [
+          makeCell("A+ Draft URL", styles.sideLabel),
+          makeCell(chart.draftUrl || "", styles.configVal),
+          ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+        ],
+        [
+          makeCell("ASIN", styles.sideLabel),
+          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.asins[idx] || "", getColStyle(idx))),
+        ],
+        [
+          makeCell("Highlight Column", styles.sideLabel),
+          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.highlightColumn[idx] ? "TRUE" : "FALSE", getColStyle(idx))),
+        ],
+        [
+          makeCell("Show Reviews", styles.sideLabel),
+          makeCell(chart.showReviews ? "TRUE" : "FALSE", getColStyle(0)),
+          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+        ],
+        [
+          makeCell("Show Prices", styles.sideLabel),
+          makeCell(chart.showPrices ? "TRUE" : "FALSE", getColStyle(0)),
+          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+        ],
+        [
+          makeCell("Show Add To Cart Button", styles.sideLabel),
+          makeCell(chart.showAddToCart ? "TRUE" : "FALSE", getColStyle(0)),
+          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+        ],
+        [
+          makeCell("Title", styles.sideLabel),
+          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.titles[idx] || "", getColStyle(idx))),
+        ],
+      ];
+
+      if (Array.isArray(chart.attributes)) {
+        chart.attributes.forEach((attr) => {
+          if (!attr || !attr.name) return;
+          rows.push([
+            makeCell(attr.name, styles.sideLabel),
+            ...Array.from({ length: 6 }, (_, idx) => makeCell(attr.values[idx] || "", getColStyle(idx))),
+          ]);
+        });
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 25 }, { wch: 30 }, { wch: 20 },
+        { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+      ];
+      ws["!views"] = [{ showGridLines: true }];
+
+      const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+      ws["!dataValidation"] = [
+        { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` },
+        { sqref: "B8:G11", type: "list", allowBlank: true, formula1: '"TRUE,FALSE"' }
+      ];
+
+      return ws;
+    } else {
+      const mod = getModuleById(moduleId);
+      const docEmpty = { border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } } };
+      const rows = [
+        [makeCell(mod ? mod.name : "A+ Module", styles.tblHeader), makeCell("", docEmpty)],
+        [makeCell("", docEmpty), makeCell("", docEmpty)],
+        [makeCell("Field", styles.tblHeader), makeCell("Value", styles.tblHeader)],
+        [makeCell("Module Type", styles.sideLabel), makeCell(moduleId, styles.configVal)],
+        [makeCell("A+ Content Title", styles.sideLabel), makeCell(chart.contentTitle || "", styles.configVal)],
+        [makeCell("A+ Draft URL", styles.sideLabel), makeCell(chart.draftUrl || "", styles.configVal)],
+      ];
+
+      if (mod && chart.fields) {
+        mod.fields.forEach((field) => {
+          const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+          if (field.repeat && field.repeat > 1) {
+            const vals = chart.fields[field.key] || [];
+            for (let i = 1; i <= field.repeat; i++) {
+              const label = `${field.label} ${i}${maxNote}`;
+              const val = vals[i - 1] || (field.type === "image" ? "(upload in Amazon editor)" : "");
+              rows.push([makeCell(label, styles.sideLabel), makeCell(val, styles.normalCol)]);
+            }
+          } else {
+            const label = `${field.label}${maxNote}`;
+            const val = chart.fields[field.key] || (field.type === "image" ? "(upload in Amazon editor)" : "");
+            rows.push([makeCell(label, styles.sideLabel), makeCell(val, styles.normalCol)]);
+          }
+        });
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [{ wch: 35 }, { wch: 60 }];
+      ws["!views"] = [{ showGridLines: true }];
+
+      const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+      ws["!dataValidation"] = [
+        { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` }
+      ];
+
+      return ws;
     }
-
-    const rows = [
-      headers,
-      [
-        makeCell("A+ Content Title", styles.sideLabel),
-        makeCell(chart.contentTitle || "", styles.configVal),
-        ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
-      ],
-      [
-        makeCell("A+ Draft URL", styles.sideLabel),
-        makeCell(chart.draftUrl || "", styles.configVal),
-        ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
-      ],
-      [
-        makeCell("ASIN", styles.sideLabel),
-        ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.asins[idx] || "", getColStyle(idx))),
-      ],
-      [
-        makeCell("Highlight Column", styles.sideLabel),
-        ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.highlightColumn[idx] ? "TRUE" : "FALSE", getColStyle(idx))),
-      ],
-      [
-        makeCell("Show Reviews", styles.sideLabel),
-        makeCell(chart.showReviews ? "TRUE" : "FALSE", getColStyle(0)),
-        ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
-      ],
-      [
-        makeCell("Show Prices", styles.sideLabel),
-        makeCell(chart.showPrices ? "TRUE" : "FALSE", getColStyle(0)),
-        ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
-      ],
-      [
-        makeCell("Show Add To Cart Button", styles.sideLabel),
-        makeCell(chart.showAddToCart ? "TRUE" : "FALSE", getColStyle(0)),
-        ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
-      ],
-      [
-        makeCell("Title", styles.sideLabel),
-        ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.titles[idx] || "", getColStyle(idx))),
-      ],
-    ];
-
-    if (Array.isArray(chart.attributes)) {
-      chart.attributes.forEach((attr) => {
-        if (!attr || !attr.name) return;
-        rows.push([
-          makeCell(attr.name, styles.sideLabel),
-          ...Array.from({ length: 6 }, (_, idx) => makeCell(attr.values[idx] || "", getColStyle(idx))),
-        ]);
-      });
-    }
-
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [
-      { wch: 25 }, { wch: 30 }, { wch: 20 },
-      { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
-    ];
-    ws["!views"] = [{ showGridLines: true }];
-    return ws;
   }
 
   /** Shared Instructions sheet builder */
@@ -644,7 +828,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function downloadChartAsExcel(chart) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, buildInstructionsSheet(), "Instructions");
-    XLSX.utils.book_append_sheet(workbook, buildChartWorksheet(chart), "A+ Comparison Chart");
+    const sheetLabel = chart.moduleId === "module-5"
+      ? "A+ Comparison Chart"
+      : (getModuleById(chart.moduleId)?.shortName || "A+ Module");
+    XLSX.utils.book_append_sheet(workbook, buildChartWorksheet(chart), sheetLabel);
     const sanitizedName = (chart.name || "APlus_Chart").replace(/[^a-zA-Z0-9_\-]/g, "_");
     XLSX.writeFile(workbook, `${sanitizedName}.xlsx`, { bookType: "xlsx" });
   }
@@ -698,7 +885,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         if (json.length > 0) {
           const chartData = processData(json, sheetName);
-          if (chartData.asins.length > 0 || chartData.attributes.length > 0) {
+          if (chartData) {
             parsedData.push(chartData);
           }
         }
@@ -722,6 +909,105 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function processData(data, sheetName) {
+    let explicitModuleId = null;
+
+    // Search the first 15 rows for "Module Type" cell
+    const searchLimit = Math.min(data.length, 15);
+    for (let i = 0; i < searchLimit; i++) {
+      const firstCell = String(data[i] && data[i][0] || "").trim().toUpperCase();
+      if (firstCell === "MODULE TYPE") {
+        explicitModuleId = String(data[i][1] || "").trim();
+        break;
+      }
+    }
+
+    // Default to "module-5" (Comparison Chart) ONLY if no Module Type was explicitly provided in the sheet.
+    const moduleId = explicitModuleId || "module-5";
+    const mod = getModuleById(moduleId);
+
+    // If a Module Type was explicitly provided but it's not in our library, disable it as an invalid module!
+    if (explicitModuleId && !mod) {
+      return {
+        name: sheetName,
+        moduleId: explicitModuleId,
+        contentTitle: "",
+        draftUrl: "",
+        previewUrl: "",
+        selected: false,
+        fields: {}
+      };
+    }
+
+    // If we detected a valid generic module, process it vertically:
+    if (mod && moduleId !== "module-5") {
+      let contentTitle = "";
+      let draftUrl = "";
+      let previewUrl = "";
+      const fields = {};
+
+      // Initialize default values for the fields based on schema
+      mod.fields.forEach(f => {
+        if (f.repeat && f.repeat > 1) {
+          fields[f.key] = new Array(f.repeat).fill("");
+        } else {
+          fields[f.key] = "";
+        }
+      });
+
+      // Scan rows to extract fields, contentTitle, and draftUrl
+      data.forEach((row) => {
+        if (!row || row.length === 0) return;
+        const rawLabel = String(row[0] || "").trim();
+        const value = String(row[1] === undefined ? "" : row[1]).trim();
+        const labelUpper = rawLabel.toUpperCase();
+
+        if (labelUpper === "A+ CONTENT TITLE") {
+          contentTitle = value;
+          return;
+        }
+        if (labelUpper === "A+ DRAFT URL") {
+          draftUrl = value;
+          previewUrl = buildPreviewUrl(draftUrl);
+          return;
+        }
+        if (labelUpper === "MODULE TYPE" || labelUpper === "FIELD" || rawLabel === mod.name) {
+          // Skip header/config rows
+          return;
+        }
+
+        // Clean label: strip "(max ... chars)" suffix
+        const cleanLabel = rawLabel.replace(/\s*\(max\s+\d+\s+chars\)/i, "").trim();
+
+        // Match against module fields schema
+        for (const field of mod.fields) {
+          if (field.repeat && field.repeat > 1) {
+            for (let i = 1; i <= field.repeat; i++) {
+              if (cleanLabel === `${field.label} ${i}`) {
+                fields[field.key][i - 1] = value;
+                break;
+              }
+            }
+          } else {
+            if (cleanLabel === field.label) {
+              fields[field.key] = value;
+              break;
+            }
+          }
+        }
+      });
+
+      return {
+        name: sheetName,
+        moduleId,
+        contentTitle,
+        draftUrl,
+        previewUrl,
+        selected: true,
+        fields,
+      };
+    }
+
+    // Otherwise, process as comparison chart (module-5)
     let contentTitle = "";
     let draftUrl = "";
     let previewUrl = "";
@@ -733,19 +1019,16 @@ document.addEventListener("DOMContentLoaded", () => {
     let titles = [];
     let attributes = [];
 
-    // PERF-3: Build a label-to-rowIndex map in a single pass to avoid running
-    // data.find() (pass 1) followed by data.forEach() (pass 2).
     let activeCols = [];
     const KNOWN_LABELS = new Set([
       "A+ CONTENT TITLE", "A+ DRAFT URL", "ASIN", "HIGHLIGHT COLUMN",
-      "SHOW REVIEWS", "SHOW PRICES", "SHOW ADD TO CART BUTTON", "TITLE"
+      "SHOW REVIEWS", "SHOW PRICES", "SHOW ADD TO CART BUTTON", "TITLE",
+      "MODULE TYPE", "COMPARISON CHART", "FIELD", "LABEL / ATTRIBUTE"
     ]);
 
     data.forEach((row, idx) => {
-      if (idx === 0) return; // skip header row
       const label = String(row[0] || "").trim().toUpperCase();
 
-      // Derive activeCols on the ASIN row (same pass, no separate .find)
       if (label === "ASIN") {
         activeCols = [];
         for (let c = 0; c < 6; c++) {
@@ -759,13 +1042,8 @@ document.addEventListener("DOMContentLoaded", () => {
         contentTitle = String(row[1] || "").trim();
       } else if (label === "A+ DRAFT URL") {
         draftUrl = String(row[1] || "").trim();
-        const match = draftUrl.match(/\/content\/([a-f0-9\-]{36})/i);
-        if (match && match[1]) {
-          previewUrl = `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
-        }
+        previewUrl = buildPreviewUrl(draftUrl);
       } else if (label === "HIGHLIGHT COLUMN") {
-        // activeCols may not be set yet if HIGHLIGHT row precedes ASIN row;
-        // normalise length at the end.
         highlightColumn = (activeCols.length ? activeCols : [0, 1, 2, 3, 4, 5]).map(
           (c) => String(row[c + 1] || "").trim().toUpperCase() === "TRUE"
         );
@@ -792,9 +1070,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    if (activeCols.length === 0) activeCols = [0, 1, 2, 3, 4, 5]; // fallback if no ASIN row
+    if (activeCols.length === 0) activeCols = [0, 1, 2, 3, 4, 5];
 
-    // Ensure array lengths match (normalize)
     const colCount = Math.max(
       asins.length,
       titles.length,
@@ -810,6 +1087,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return {
       name: sheetName,
+      moduleId: "module-5",
       contentTitle,
       draftUrl,
       previewUrl,
@@ -976,11 +1254,7 @@ document.addEventListener("DOMContentLoaded", () => {
           chart.draftUrl,
           (val) => {
             chart.draftUrl = val;
-            const match = val.match(/\/content\/([a-f0-9\-]{36})/i);
-            chart.previewUrl =
-              match && match[1]
-                ? `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`
-                : "";
+            chart.previewUrl = buildPreviewUrl(val);
 
             const previewEl = acc.querySelector(".preview-link-display");
             if (previewEl) {
@@ -1014,272 +1288,364 @@ document.addEventListener("DOMContentLoaded", () => {
       previewLinkDiv.appendChild(a);
       inner.appendChild(previewLinkDiv);
 
-      // 2. Global Toggles
-      inner.appendChild(createSectionHeader("Display Toggles"));
-      const toggleGroup = document.createElement("div");
-      toggleGroup.className = "toggle-group";
-      toggleGroup.appendChild(
-        createToggle("Show Reviews", chart.showReviews, (val) => {
-          chart.showReviews = val;
-          validateInputs();
-        }),
-      );
-      toggleGroup.appendChild(
-        createToggle("Show Prices", chart.showPrices, (val) => {
-          chart.showPrices = val;
-          validateInputs();
-        }),
-      );
-      toggleGroup.appendChild(
-        createToggle("Show Add To Cart", chart.showAddToCart, (val) => {
-          chart.showAddToCart = val;
-          validateInputs();
-        }),
-      );
-      inner.appendChild(toggleGroup);
+      // 2. Conditional rendering based on module type
+      if (chart.moduleId === "module-5") {
+        // Global Toggles
+        inner.appendChild(createSectionHeader("Display Toggles"));
+        const toggleGroup = document.createElement("div");
+        toggleGroup.className = "toggle-group";
+        toggleGroup.appendChild(
+          createToggle("Show Reviews", chart.showReviews, (val) => {
+            chart.showReviews = val;
+            validateInputs();
+          }),
+        );
+        toggleGroup.appendChild(
+          createToggle("Show Prices", chart.showPrices, (val) => {
+            chart.showPrices = val;
+            validateInputs();
+          }),
+        );
+        toggleGroup.appendChild(
+          createToggle("Show Add To Cart", chart.showAddToCart, (val) => {
+            chart.showAddToCart = val;
+            validateInputs();
+          }),
+        );
+        inner.appendChild(toggleGroup);
 
-      // 3. Products Grid
-      inner.appendChild(
-        createSectionHeader(`Products (${chart.asins.length}/6)`),
-      );
-      const prodGrid = document.createElement("div");
-      prodGrid.className = "product-grid";
+        // Products Grid (Tabular Column Formate)
+        inner.appendChild(
+          createSectionHeader(`Products (${chart.asins.length}/6)`),
+        );
 
-      chart.asins.forEach((asin, colIdx) => {
-        const isBase = colIdx === 0;
-        const prodCard = document.createElement("div");
-        prodCard.className = `product-card ${chart.highlightColumn[colIdx] ? "highlight-product" : ""}`;
+        const prodScroll = document.createElement("div");
+        prodScroll.className = "metrics-scroll";
 
-        const headerDiv = document.createElement("div");
-        headerDiv.className = "product-card-header";
+        const prodTable = document.createElement("table");
+        prodTable.className = "metrics-table";
 
-        const labelSpan = document.createElement("span");
-        labelSpan.className = `product-card-label ${!isBase ? "competitor-label" : ""}`;
-        labelSpan.textContent = isBase
-          ? "Base Product"
-          : "Competitor " + colIdx;
+        // Table Header
+        const prodThead = document.createElement("thead");
+        const prodTrHead = document.createElement("tr");
 
-        const actionsDiv = document.createElement("div");
-        actionsDiv.style.display = "flex";
-        actionsDiv.style.gap = "0.5rem";
-        actionsDiv.style.alignItems = "center";
+        const thProdField = document.createElement("th");
+        thProdField.textContent = "Product Info";
+        prodTrHead.appendChild(thProdField);
 
-        const hlLabel = document.createElement("label");
-        hlLabel.className = "highlight-check";
-        const hlInput = document.createElement("input");
-        hlInput.type = "checkbox";
-        hlInput.className = "col-highlight-cb";
-        hlInput.checked = !!chart.highlightColumn[colIdx];
-        const hlSpan = document.createElement("span");
-        hlSpan.className = "highlight-check-label";
-        hlSpan.textContent = "Highlight";
-        hlLabel.append(hlInput, hlSpan);
-        actionsDiv.appendChild(hlLabel);
-
-        if (!isBase) {
-          const delBtn = document.createElement("button");
-          delBtn.className = "btn-icon delete-col-btn";
-          delBtn.title = "Remove Product";
-          delBtn.setAttribute("aria-label", "Remove Competitor Product");
-          delBtn.textContent = "🗑";
-          actionsDiv.appendChild(delBtn);
-        }
-
-        headerDiv.append(labelSpan, actionsDiv);
-
-        const fieldsDiv = document.createElement("div");
-        fieldsDiv.className = "product-fields";
-
-        prodCard.append(headerDiv, fieldsDiv);
-
-        // Bind events for highlight checkbox
-        const hlCb = prodCard.querySelector(".col-highlight-cb");
-        hlCb.addEventListener("change", (e) => {
-          chart.highlightColumn[colIdx] = e.target.checked;
-          if (e.target.checked) {
-            // BUG-3: Surgical DOM update — only restyle the product cards in this
-            // accordion instead of calling renderPreview() which destroys and
-            // rebuilds the entire preview (hundreds of DOM nodes per chart).
-            chart.highlightColumn = chart.highlightColumn.map((_, i) => i === colIdx);
-            const allCards = prodGrid.querySelectorAll(".product-card");
-            const allCbs = prodGrid.querySelectorAll(".col-highlight-cb");
-            allCards.forEach((card, i) => {
-              card.classList.toggle("highlight-product", i === colIdx);
+        for (let c = 0; c < chart.asins.length; c++) {
+          const th = document.createElement("th");
+          if (c === 0) {
+            th.textContent = "Base";
+          } else {
+            th.style.whiteSpace = "nowrap";
+            
+            const spanLabel = document.createElement("span");
+            spanLabel.textContent = "Comp " + c + " ";
+            
+            const delBtn = document.createElement("button");
+            delBtn.className = "btn-icon";
+            delBtn.textContent = "🗑";
+            delBtn.title = "Remove Competitor";
+            delBtn.style.display = "inline-block";
+            delBtn.style.marginLeft = "4px";
+            delBtn.style.fontSize = "0.75rem";
+            delBtn.addEventListener("click", () => {
+              chart.asins.splice(c, 1);
+              chart.titles.splice(c, 1);
+              chart.highlightColumn.splice(c, 1);
+              chart.attributes.forEach((attr) => attr.values.splice(c, 1));
+              renderPreview();
+              validateInputs();
             });
-            allCbs.forEach((cb, i) => {
-              cb.checked = i === colIdx;
-            });
+            th.append(spanLabel, delBtn);
           }
-          validateInputs(); // discrete action — call directly, no debounce needed
-        });
+          prodTrHead.appendChild(th);
+        }
+        prodThead.appendChild(prodTrHead);
+        prodTable.appendChild(prodThead);
 
-        // Bind delete button
-        const delBtn = prodCard.querySelector(".delete-col-btn");
-        if (delBtn) {
-          delBtn.addEventListener("click", () => {
-            chart.asins.splice(colIdx, 1);
-            chart.titles.splice(colIdx, 1);
-            chart.highlightColumn.splice(colIdx, 1);
-            chart.attributes.forEach((attr) => attr.values.splice(colIdx, 1));
+        const prodTbody = document.createElement("tbody");
+
+        // ASIN Row
+        const trAsin = document.createElement("tr");
+        const tdAsinLabel = document.createElement("td");
+        tdAsinLabel.textContent = "ASIN";
+        tdAsinLabel.style.fontWeight = "bold";
+        trAsin.appendChild(tdAsinLabel);
+
+        for (let c = 0; c < chart.asins.length; c++) {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "text";
+          input.className = "metric-input";
+          input.value = chart.asins[c] || "";
+          input.addEventListener("input", (e) => {
+            chart.asins[c] = e.target.value;
+            validateInputsDebounced();
+          });
+          td.appendChild(input);
+          trAsin.appendChild(td);
+        }
+        prodTbody.appendChild(trAsin);
+
+        // Title Row
+        const trTitle = document.createElement("tr");
+        const tdTitleLabel = document.createElement("td");
+        tdTitleLabel.textContent = "Title";
+        tdTitleLabel.style.fontWeight = "bold";
+        trTitle.appendChild(tdTitleLabel);
+
+        for (let c = 0; c < chart.asins.length; c++) {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "text";
+          input.className = "metric-input";
+          input.value = chart.titles[c] || "";
+          input.addEventListener("input", (e) => {
+            chart.titles[c] = e.target.value;
+            validateInputsDebounced();
+          });
+          td.appendChild(input);
+          trTitle.appendChild(td);
+        }
+        prodTbody.appendChild(trTitle);
+
+        // Highlight Row
+        const trHl = document.createElement("tr");
+        const tdHlLabel = document.createElement("td");
+        tdHlLabel.textContent = "Highlight";
+        tdHlLabel.style.fontWeight = "bold";
+        trHl.appendChild(tdHlLabel);
+
+        for (let c = 0; c < chart.asins.length; c++) {
+          const td = document.createElement("td");
+          td.style.textAlign = "center";
+          
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = !!chart.highlightColumn[c];
+          checkbox.addEventListener("change", (e) => {
+            chart.highlightColumn[c] = e.target.checked;
+            if (e.target.checked) {
+              chart.highlightColumn = chart.highlightColumn.map((_, i) => i === c);
+              renderPreview();
+            }
+            validateInputs();
+          });
+          td.appendChild(checkbox);
+          trHl.appendChild(td);
+        }
+        prodTbody.appendChild(trHl);
+
+        prodTable.appendChild(prodTbody);
+        prodScroll.appendChild(prodTable);
+        inner.appendChild(prodScroll);
+
+        // Add Product Button
+        if (chart.asins.length < 6) {
+          const addProdBtn = document.createElement("button");
+          addProdBtn.className = "btn-sm";
+          addProdBtn.textContent = "+ Add Competitor";
+          addProdBtn.addEventListener("click", () => {
+            chart.asins.push("");
+            chart.titles.push("");
+            chart.highlightColumn.push(false);
+            chart.attributes.forEach((attr) => attr.values.push(""));
             renderPreview();
             validateInputs();
           });
+          inner.appendChild(addProdBtn);
         }
 
-        // Inputs — use debounced validateInputs for keystrokes (PERF-1)
-        fieldsDiv.appendChild(
-          createMiniField("ASIN", asin, (val) => {
-            chart.asins[colIdx] = val;
-            validateInputsDebounced();
-          }),
-        );
-        fieldsDiv.appendChild(
-          createMiniField("Title", chart.titles[colIdx], (val) => {
-            chart.titles[colIdx] = val;
-            validateInputsDebounced();
-          }),
+        // Comparison Metrics
+        inner.appendChild(
+          createSectionHeader(
+            `Comparison Metrics (${chart.attributes.length}/10)`,
+          ),
         );
 
-        prodGrid.appendChild(prodCard);
-      });
-      inner.appendChild(prodGrid);
+        const metricsScroll = document.createElement("div");
+        metricsScroll.className = "metrics-scroll";
 
-      // Add Product Button
-      if (chart.asins.length < 6) {
-        const addProdBtn = document.createElement("button");
-        addProdBtn.className = "btn-sm";
-        addProdBtn.textContent = "+ Add Competitor";
-        addProdBtn.addEventListener("click", () => {
-          chart.asins.push("");
-          chart.titles.push("");
-          chart.highlightColumn.push(false);
-          chart.attributes.forEach((attr) => attr.values.push(""));
-          renderPreview();
-          validateInputs();
-        });
-        inner.appendChild(addProdBtn);
-      }
+        const table = document.createElement("table");
+        table.className = "metrics-table";
 
-      // 4. Comparison Metrics
-      inner.appendChild(
-        createSectionHeader(
-          `Comparison Metrics (${chart.attributes.length}/10)`,
-        ),
-      );
+        // Table Header
+        const thead = document.createElement("thead");
+        const trHead = document.createElement("tr");
 
-      const metricsScroll = document.createElement("div");
-      metricsScroll.className = "metrics-scroll";
+        const thMetric = document.createElement("th");
+        thMetric.textContent = "Metric Name";
+        trHead.appendChild(thMetric);
 
-      const table = document.createElement("table");
-      table.className = "metrics-table";
-
-      // Table Header
-      const thead = document.createElement("thead");
-      const trHead = document.createElement("tr");
-
-      const thMetric = document.createElement("th");
-      thMetric.textContent = "Metric Name";
-      trHead.appendChild(thMetric);
-
-      for (let c = 0; c < chart.asins.length; c++) {
-        const th = document.createElement("th");
-        th.textContent = c === 0 ? "Base" : "Comp " + c;
-        trHead.appendChild(th);
-      }
-
-      const thEmpty = document.createElement("th");
-      trHead.appendChild(thEmpty);
-
-      thead.appendChild(trHead);
-      table.appendChild(thead);
-
-      // Table Body
-      const tbody = document.createElement("tbody");
-      chart.attributes.forEach((attr, rIdx) => {
-        const tr = document.createElement("tr");
-
-        // Name cell
-        const tdName = document.createElement("td");
-        const nameInput = document.createElement("input");
-        nameInput.type = "text";
-        nameInput.className = "metric-input metric-name";
-        nameInput.value = attr.name || "";
-        nameInput.addEventListener("input", (e) => {
-          attr.name = e.target.value;
-          validateInputsDebounced(); // PERF-1: debounced for keystroke inputs
-        });
-        tdName.appendChild(nameInput);
-        tr.appendChild(tdName);
-
-        // Value cells
         for (let c = 0; c < chart.asins.length; c++) {
-          const tdVal = document.createElement("td");
-          const valInput = document.createElement("input");
-          valInput.type = "text";
-          valInput.className = "metric-input";
-          valInput.value = attr.values[c] || "";
-          valInput.addEventListener("input", (e) => {
-            attr.values[c] = e.target.value;
+          const th = document.createElement("th");
+          th.textContent = c === 0 ? "Base" : "Comp " + c;
+          trHead.appendChild(th);
+        }
+
+        const thEmpty = document.createElement("th");
+        trHead.appendChild(thEmpty);
+
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        // Table Body
+        const tbody = document.createElement("tbody");
+        chart.attributes.forEach((attr, rIdx) => {
+          const tr = document.createElement("tr");
+
+          // Name cell
+          const tdName = document.createElement("td");
+          const nameInput = document.createElement("input");
+          nameInput.type = "text";
+          nameInput.className = "metric-input metric-name";
+          nameInput.value = attr.name || "";
+          nameInput.addEventListener("input", (e) => {
+            attr.name = e.target.value;
             validateInputsDebounced(); // PERF-1: debounced for keystroke inputs
           });
-          tdVal.appendChild(valInput);
-          tr.appendChild(tdVal);
+          tdName.appendChild(nameInput);
+          tr.appendChild(tdName);
+
+          // Value cells
+          for (let c = 0; c < chart.asins.length; c++) {
+            const tdVal = document.createElement("td");
+            const valInput = document.createElement("input");
+            valInput.type = "text";
+            valInput.className = "metric-input";
+            valInput.value = attr.values[c] || "";
+            valInput.addEventListener("input", (e) => {
+              attr.values[c] = e.target.value;
+              validateInputsDebounced(); // PERF-1: debounced for keystroke inputs
+            });
+            tdVal.appendChild(valInput);
+            tr.appendChild(tdVal);
+          }
+
+          // Delete button cell
+          const tdDel = document.createElement("td");
+          const rowDelBtn = document.createElement("button");
+          rowDelBtn.className = "btn-icon";
+          rowDelBtn.textContent = "✕";
+          rowDelBtn.setAttribute("title", "Remove Metric");
+          rowDelBtn.setAttribute(
+            "aria-label",
+            `Remove Metric Row ${attr.name || ""}`,
+          );
+          rowDelBtn.style.width = "20px";
+          rowDelBtn.style.height = "20px";
+          rowDelBtn.style.fontSize = "0.6rem";
+          rowDelBtn.addEventListener("click", () => {
+            chart.attributes.splice(rIdx, 1);
+            renderPreview();
+            validateInputs();
+          });
+          tdDel.appendChild(rowDelBtn);
+          tr.appendChild(tdDel);
+
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        metricsScroll.appendChild(table);
+
+        if (chart.attributes.length > 0) {
+          inner.appendChild(metricsScroll);
         }
 
-        // Delete button cell
-        const tdDel = document.createElement("td");
-        const rowDelBtn = document.createElement("button");
-        rowDelBtn.className = "btn-icon";
-        rowDelBtn.textContent = "✕";
-        rowDelBtn.setAttribute("title", "Remove Metric");
-        rowDelBtn.setAttribute(
-          "aria-label",
-          `Remove Metric Row ${attr.name || ""}`,
-        );
-        rowDelBtn.style.width = "20px";
-        rowDelBtn.style.height = "20px";
-        rowDelBtn.style.fontSize = "0.6rem";
-        rowDelBtn.addEventListener("click", () => {
-          chart.attributes.splice(rIdx, 1);
-          renderPreview();
-          validateInputs();
-        });
-        tdDel.appendChild(rowDelBtn);
-        tr.appendChild(tdDel);
-
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      metricsScroll.appendChild(table);
-
-      if (chart.attributes.length > 0) {
-        inner.appendChild(metricsScroll);
-      }
-
-      // Add Metric Button
-      if (chart.attributes.length < 10) {
-        const addMetBtn = document.createElement("button");
-        addMetBtn.className = "btn-sm";
-        addMetBtn.textContent = "+ Add Metric";
-        addMetBtn.addEventListener("click", () => {
-          chart.attributes.push({
-            name: "New Metric",
-            values: new Array(chart.asins.length).fill(""),
+        // Add Metric Button
+        if (chart.attributes.length < 10) {
+          const addMetBtn = document.createElement("button");
+          addMetBtn.className = "btn-sm";
+          addMetBtn.textContent = "+ Add Metric";
+          addMetBtn.addEventListener("click", () => {
+            chart.attributes.push({
+              name: "New Metric",
+              values: new Array(chart.asins.length).fill(""),
+            });
+            renderPreview();
+            validateInputs();
           });
-          renderPreview();
-          validateInputs();
-        });
-        inner.appendChild(addMetBtn);
+          inner.appendChild(addMetBtn);
+        }
+      } else {
+        // Generic module fields layout
+        const mod = getModuleById(chart.moduleId);
+        if (mod) {
+          inner.appendChild(createSectionHeader(`${mod.name} Fields`));
+
+          mod.fields.forEach((field) => {
+            if (field.type === "image") {
+              const imgRow = createFieldRow(field.label, "(upload in Amazon editor)", () => {}, "input-disabled");
+              const input = imgRow.querySelector("input");
+              if (input) input.disabled = true;
+              inner.appendChild(imgRow);
+            } else {
+              const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+              const isTextarea = field.type === "textarea";
+
+              if (field.repeat && field.repeat > 1) {
+                if (!Array.isArray(chart.fields[field.key])) {
+                  chart.fields[field.key] = new Array(field.repeat).fill("");
+                }
+                const vals = chart.fields[field.key];
+                for (let i = 0; i < field.repeat; i++) {
+                  const label = `${field.label} ${i + 1}${maxNote}`;
+                  const val = vals[i] || "";
+                  if (isTextarea) {
+                    inner.appendChild(createTextareaRow(label, val, (newVal) => {
+                      chart.fields[field.key][i] = newVal;
+                      validateInputsDebounced();
+                    }));
+                  } else {
+                    inner.appendChild(createFieldRow(label, val, (newVal) => {
+                      chart.fields[field.key][i] = newVal;
+                      validateInputsDebounced();
+                    }));
+                  }
+                }
+              } else {
+                const label = `${field.label}${maxNote}`;
+                const val = chart.fields[field.key] || "";
+                if (isTextarea) {
+                  inner.appendChild(createTextareaRow(label, val, (newVal) => {
+                    chart.fields[field.key] = newVal;
+                    validateInputsDebounced();
+                  }));
+                } else if (field.type === "boolean") {
+                  inner.appendChild(createToggle(label, !!val, (newVal) => {
+                    chart.fields[field.key] = newVal;
+                    validateInputsDebounced();
+                  }));
+                } else {
+                  inner.appendChild(createFieldRow(label, val, (newVal) => {
+                    chart.fields[field.key] = newVal;
+                    validateInputsDebounced();
+                  }));
+                }
+              }
+            }
+          });
+        }
       }
 
-      // 5. Live Amazon Preview Sandbox
+      // Live Amazon Preview Sandbox
       const sandboxContainer = document.createElement("div");
       sandboxContainer.className = "sandbox-container";
       inner.appendChild(sandboxContainer);
 
       SandboxRenderer.render(sandboxContainer, chart, (type, rowIdx, colIdx, newVal) => {
-        if (type === "metric") {
+        if (type === "metric" && chart.moduleId === "module-5") {
           chart.attributes[rowIdx].values[colIdx] = newVal;
+          renderPreview();
+          validateInputsDebounced();
+        } else if (type === "field" && chart.moduleId !== "module-5") {
+          if (colIdx !== null && colIdx !== undefined) {
+            chart.fields[rowIdx][colIdx] = newVal;
+          } else {
+            chart.fields[rowIdx] = newVal;
+          }
           renderPreview();
           validateInputsDebounced();
         }
@@ -1312,6 +1678,23 @@ document.addEventListener("DOMContentLoaded", () => {
     input.value = value || "";
     input.addEventListener("input", (e) => onChange(e.target.value));
     div.appendChild(input);
+    return div;
+  }
+
+  function createTextareaRow(label, value, onChange, extraClass = "") {
+    const div = document.createElement("div");
+    div.className = "field-row textarea-row";
+    const labelDiv = document.createElement("div");
+    labelDiv.className = "field-label";
+    labelDiv.textContent = label;
+    div.appendChild(labelDiv);
+    const textarea = document.createElement("textarea");
+    textarea.className = `field-input ${extraClass}`;
+    textarea.value = value || "";
+    textarea.style.minHeight = "60px";
+    textarea.style.resize = "vertical";
+    textarea.addEventListener("input", (e) => onChange(e.target.value));
+    div.appendChild(textarea);
     return div;
   }
 
@@ -1353,8 +1736,10 @@ document.addEventListener("DOMContentLoaded", () => {
     labelEl.appendChild(spanText);
     return labelEl;
   }  // --- History Logic ---
+  // BOLT OPTIMIZATION: Instantiate Intl.RelativeTimeFormat once in DomContentLoaded scope to avoid GC/re-creation overhead during history rendering.
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
   function getRelativeTime(timestamp) {
-    const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
     const diff = Date.now() - timestamp;
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -1631,49 +2016,88 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Validation Logic ---
   function getChartErrors(chart) {
     const errors = [];
-    // We no longer treat a missing draft URL as a blocking error, as we can automatically create a new draft.
 
-    if (!chart.asins || chart.asins.length === 0) {
-      errors.push("Missing ASINs");
-    } else {
-      if (chart.asins.length > 6)
-        errors.push(`Too many ASINs (${chart.asins.length}). Max is 6.`);
-      chart.asins.forEach((asin, idx) => {
-        if (!asin || !/^[A-Z0-9]{10}$/i.test(asin.trim())) {
-          errors.push(
-            `Invalid ASIN at position ${idx + 1}: "${asin}". Must be 10 characters.`,
-          );
-        }
-      });
-    }
-
-    if (chart.titles) {
-      chart.titles.forEach((title, idx) => {
-        if (title && title.length > 80) {
-          errors.push(
-            `Product Title at position ${idx + 1} exceeds 80 characters (current: ${title.length}).`,
-          );
-        }
-      });
-    }
-
-    if (chart.attributes) {
-      if (chart.attributes.length > 10) {
-        errors.push(
-          `Too many metric rows (${chart.attributes.length}). Max is 10.`,
-        );
+    if (chart.moduleId === "module-5") {
+      if (!chart.asins || chart.asins.length === 0) {
+        errors.push("Missing ASINs");
+      } else {
+        if (chart.asins.length > 6)
+          errors.push(`Too many ASINs (${chart.asins.length}). Max is 6.`);
+        chart.asins.forEach((asin, idx) => {
+          if (!asin || !/^[A-Z0-9]{10}$/i.test(asin.trim())) {
+            errors.push(
+              `Invalid ASIN at position ${idx + 1}: "${asin}". Must be 10 characters.`,
+            );
+          }
+        });
       }
-      chart.attributes.forEach((attr, rIdx) => {
-        if (attr.values) {
-          attr.values.forEach((val, cIdx) => {
-            if (val && val.length > 250) {
-              errors.push(
-                `Metric "${attr.name || 'Row ' + (rIdx + 1)}" value at position ${cIdx + 1} exceeds 250 characters (current: ${val.length}).`,
-              );
+
+      if (chart.titles) {
+        chart.titles.forEach((title, idx) => {
+          if (title && title.length > 80) {
+            errors.push(
+              `Product Title at position ${idx + 1} exceeds 80 characters (current: ${title.length}).`,
+            );
+          }
+        });
+      }
+
+      if (chart.attributes) {
+        if (chart.attributes.length > 10) {
+          errors.push(
+            `Too many metric rows (${chart.attributes.length}). Max is 10.`,
+          );
+        }
+        chart.attributes.forEach((attr, rIdx) => {
+          if (attr.values) {
+            attr.values.forEach((val, cIdx) => {
+              if (val && val.length > 250) {
+                errors.push(
+                  `Metric "${attr.name || 'Row ' + (rIdx + 1)}" value at position ${cIdx + 1} exceeds 250 characters (current: ${val.length}).`,
+                );
+              }
+            });
+          }
+        });
+      }
+    } else {
+      const mod = getModuleById(chart.moduleId);
+      if (!mod) {
+        errors.push(`Unknown module type: "${chart.moduleId}"`);
+      } else {
+        if (!chart.fields) {
+          errors.push("Missing module fields configuration");
+        } else {
+          mod.fields.forEach((field) => {
+            if (field.type === "image") return;
+
+            if (field.repeat && field.repeat > 1) {
+              const vals = chart.fields[field.key] || [];
+              for (let i = 0; i < field.repeat; i++) {
+                const val = vals[i] || "";
+                if (field.maxLength && val.length > field.maxLength) {
+                  errors.push(
+                    `Field "${field.label} ${i + 1}" exceeds ${field.maxLength} characters (current: ${val.length}).`,
+                  );
+                }
+                if (field.required && !val.trim()) {
+                  errors.push(`Field "${field.label} ${i + 1}" is required.`);
+                }
+              }
+            } else {
+              const val = chart.fields[field.key] || "";
+              if (field.maxLength && val.length > field.maxLength) {
+                errors.push(
+                  `Field "${field.label}" exceeds ${field.maxLength} characters (current: ${val.length}).`,
+                );
+              }
+              if (field.required && !val.trim()) {
+                errors.push(`Field "${field.label}" is required.`);
+              }
             }
           });
         }
-      });
+      }
     }
     return errors;
   }
@@ -1778,11 +2202,40 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  const openPortalBtn = document.getElementById("openPortalBtn");
+  if (openPortalBtn) {
+    openPortalBtn.addEventListener("click", () => {
+      const portal = document.getElementById("portalSelect").value;
+      const domain = document.getElementById("domainSelect").value;
+      
+      let url = "";
+      if (portal === "seller") {
+        url = `https://sellercentral.amazon.${domain}/enhanced-content/content-manager`;
+      } else {
+        url = `https://vendorcentral.amazon.${domain}/hz/vendor/members/aplus/content-manager`;
+      }
+      
+      if (chrome && chrome.tabs) {
+        chrome.tabs.create({ url });
+      } else {
+        window.open(url, "_blank");
+      }
+    });
+  }
+
   startBtn.addEventListener("click", () => {
     const selectedCharts = parsedData.filter(
       (chart) => chart.selected !== false,
     );
     if (selectedCharts.length === 0) return; // Safety check
+
+    // Enrich charts with their module schema so automation script gets all the rules
+    const enrichedCharts = selectedCharts.map((chart) => {
+      return {
+        ...chart,
+        moduleSchema: getModuleById(chart.moduleId || "module-5"),
+      };
+    });
 
     document.body.classList.add("automation-running");
     statusContainer.classList.remove("hidden");
@@ -1792,9 +2245,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const logList = document.getElementById("logList");
     if (logList) logList.textContent = ""; // Clear previous logs
 
+    const portal = document.getElementById("portalSelect")?.value || "vendor";
+    const domain = document.getElementById("domainSelect")?.value || "com";
+
     chrome.runtime.sendMessage({
       type: "START_AUTOMATION",
-      data: { charts: selectedCharts },
+      data: { 
+        charts: enrichedCharts,
+        portal: portal,
+        domain: domain
+      },
     });
   });
 
@@ -2027,18 +2487,24 @@ document.addEventListener("DOMContentLoaded", () => {
           const validUrls = processed.map((c) => c.previewUrl).filter(Boolean);
           if (validUrls.length === 0) return;
 
-          chrome.windows.create(
-            { url: validUrls[0], state: "maximized" },
-            (newWindow) => {
-              for (let i = 1; i < validUrls.length; i++) {
-                chrome.tabs.create({
-                  windowId: newWindow.id,
-                  url: validUrls[i],
-                  active: false,
-                });
-              }
-            },
-          );
+          // P3: Guard — chrome.windows may not be available in sidepanel context
+          if (chrome.windows && chrome.windows.create) {
+            chrome.windows.create(
+              { url: validUrls[0], state: "maximized" },
+              (newWindow) => {
+                for (let i = 1; i < validUrls.length; i++) {
+                  chrome.tabs.create({
+                    windowId: newWindow.id,
+                    url: validUrls[i],
+                    active: false,
+                  });
+                }
+              },
+            );
+          } else {
+            // Fallback: open each URL in a new tab
+            validUrls.forEach((url) => chrome.tabs.create({ url, active: false }));
+          }
         };
       }
 

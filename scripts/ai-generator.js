@@ -29,6 +29,37 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
   const claudeModelSelect = document.getElementById("claudeModelSelect");
   const claudeCustomInput = document.getElementById("claudeCustomInput");
 
+  // Advanced Config Elements
+  const aiMaxTokens = document.getElementById("aiMaxTokens");
+  const aiTemperature = document.getElementById("aiTemperature");
+  const aiTopP = document.getElementById("aiTopP");
+  const aiTopK = document.getElementById("aiTopK");
+
+  // Token Metrics Elements
+  const tokenLastInput = document.getElementById("tokenLastInput");
+  const tokenLastOutput = document.getElementById("tokenLastOutput");
+  const tokenOverallInput = document.getElementById("tokenOverallInput");
+  const tokenOverallOutput = document.getElementById("tokenOverallOutput");
+
+  function updateTokenMetrics(usage) {
+    if (!usage) return;
+    chrome.storage.local.get(["aiTokenMetrics"], (result) => {
+      let metrics = result.aiTokenMetrics || { lastInput: 0, lastOutput: 0, overallInput: 0, overallOutput: 0 };
+      
+      metrics.lastInput = usage.input || 0;
+      metrics.lastOutput = usage.output || 0;
+      metrics.overallInput += usage.input || 0;
+      metrics.overallOutput += usage.output || 0;
+
+      chrome.storage.local.set({ aiTokenMetrics: metrics }, () => {
+        if (tokenLastInput) tokenLastInput.textContent = metrics.lastInput.toLocaleString();
+        if (tokenLastOutput) tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
+        if (tokenOverallInput) tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
+        if (tokenOverallOutput) tokenOverallOutput.textContent = metrics.overallOutput.toLocaleString();
+      });
+    });
+  }
+
   function updateKeyVisibility() {
     const platform = platformSelect.value;
 
@@ -72,8 +103,18 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       // Load OpenAI
       openaiKey.value = settings.openai?.key || "";
-      const oModel = settings.openai?.model || "gpt-4o";
-      if (["gpt-4o", "gpt-4o-mini"].includes(oModel)) {
+      const oModel = settings.openai?.model || "gpt-5.5";
+      if (
+        [
+          "gpt-5.5",
+          "gpt-5.5-instant",
+          "gpt-5.4",
+          "gpt-5.4-mini",
+          "gpt-5.4-nano",
+          "gpt-4o",
+          "gpt-4o-mini",
+        ].includes(oModel)
+      ) {
         openaiModelSelect.value = oModel;
       } else if (oModel) {
         openaiModelSelect.value = "custom";
@@ -82,8 +123,18 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       // Load Gemini
       geminiKey.value = settings.gemini?.key || "";
-      const gModel = settings.gemini?.model || "gemini-2.0-flash";
-      if (["gemini-2.0-flash", "gemini-2.5-pro"].includes(gModel)) {
+      const gModel = settings.gemini?.model || "gemini-3.5-flash";
+      if (
+        [
+          "gemini-3.5-flash",
+          "gemini-3.1-pro",
+          "gemini-3.1-flash-lite",
+          "gemini-2.5-pro",
+          "gemini-2.5-flash",
+          "gemini-2.0-flash",
+          "gemini-1.5-flash",
+        ].includes(gModel)
+      ) {
         geminiModelSelect.value = gModel;
       } else if (gModel) {
         geminiModelSelect.value = "custom";
@@ -92,11 +143,16 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       // Load Claude
       claudeKey.value = settings.claude?.key || "";
-      const cModel = settings.claude?.model || "claude-3-5-sonnet-20241022";
+      const cModel = settings.claude?.model || "claude-4-7-opus-latest";
       if (
-        ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"].includes(
-          cModel,
-        )
+        [
+          "claude-4-7-opus-latest",
+          "claude-4-6-sonnet-latest",
+          "claude-4-5-haiku-latest",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022",
+          "claude-3-haiku-20240307",
+        ].includes(cModel)
       ) {
         claudeModelSelect.value = cModel;
       } else if (cModel) {
@@ -104,7 +160,31 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
         claudeCustomInput.value = cModel;
       }
 
+      // Load Advanced Configs
+      if (settings.advanced) {
+        if (aiMaxTokens) aiMaxTokens.value = settings.advanced.maxTokens || 4096;
+        if (aiTemperature) aiTemperature.value = settings.advanced.temperature !== undefined ? settings.advanced.temperature : 0.1;
+        if (aiTopP) aiTopP.value = settings.advanced.topP !== undefined ? settings.advanced.topP : 1.0;
+        if (aiTopK) aiTopK.value = settings.advanced.topK || 40;
+      } else {
+        if (aiMaxTokens) aiMaxTokens.value = 4096;
+        if (aiTemperature) aiTemperature.value = 0.1;
+        if (aiTopP) aiTopP.value = 1.0;
+        if (aiTopK) aiTopK.value = 40;
+      }
+
       updateKeyVisibility();
+    });
+
+    // Load Token Metrics
+    chrome.storage.local.get(["aiTokenMetrics"], (result) => {
+      const metrics = result.aiTokenMetrics || {
+        lastInput: 0, lastOutput: 0, overallInput: 0, overallOutput: 0
+      };
+      if (tokenLastInput) tokenLastInput.textContent = metrics.lastInput.toLocaleString();
+      if (tokenLastOutput) tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
+      if (tokenOverallInput) tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
+      if (tokenOverallOutput) tokenOverallOutput.textContent = metrics.overallOutput.toLocaleString();
     });
 
     saveBtn.addEventListener("click", () => {
@@ -131,6 +211,12 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
               ? claudeCustomInput.value
               : claudeModelSelect.value,
         },
+        advanced: {
+          maxTokens: parseInt(aiMaxTokens.value) || 4096,
+          temperature: parseFloat(aiTemperature.value) !== undefined ? parseFloat(aiTemperature.value) : 0.1,
+          topP: parseFloat(aiTopP.value) !== undefined ? parseFloat(aiTopP.value) : 1.0,
+          topK: parseInt(aiTopK.value) || 40
+        }
       };
       chrome.storage.local.set({ aiSettings: settings }, () => {
         const originalText = saveBtn.textContent;
@@ -195,7 +281,9 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     if (generateBtn) {
       generateBtn.disabled = !isAllRequiredMapped;
       generateBtn.style.opacity = isAllRequiredMapped ? "1" : "0.6";
-      generateBtn.style.cursor = isAllRequiredMapped ? "pointer" : "not-allowed";
+      generateBtn.style.cursor = isAllRequiredMapped
+        ? "pointer"
+        : "not-allowed";
     }
 
     if (validationHelper) {
@@ -211,20 +299,43 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
   });
 
   const STRATEGY_DESCRIPTIONS = {
-    balanced: "<strong>Balanced CRO (Standard)</strong><br>A structured mix of Hero highlights, checkmarks (10:6), and clean metrics. Best for general products.",
-    premium: "<strong>Premium Justification</strong><br>Focuses on quality, materials, and high-end aesthetics. Uses more descriptive checkmarks (10:7) to convey value.",
-    technical: "<strong>Technical Focus</strong><br>Emphasizes precise specifications, dimensions, and raw performance data. Checkmarks are used sparingly (10:4).",
-    usability: "<strong>Usability & Lifestyle</strong><br>Translates specs into daily benefits (e.g., 'Lasts All Day'). Balanced checkmarks (10:6) focusing on user experience."
+    balanced:
+      "<strong>Balanced CRO (Standard)</strong><br>A structured mix of Hero highlights, checkmarks (10:6), and clean metrics. Best for general products.",
+    premium:
+      "<strong>Premium Justification</strong><br>Focuses on quality, materials, and high-end aesthetics. Uses more descriptive checkmarks (10:7) to convey value.",
+    technical:
+      "<strong>Technical Focus</strong><br>Emphasizes precise specifications, dimensions, and raw performance data. Checkmarks are used sparingly (10:4).",
+    usability:
+      "<strong>Usability & Lifestyle</strong><br>Translates specs into daily benefits (e.g., 'Lasts All Day'). Balanced checkmarks (10:6) focusing on user experience.",
   };
 
   const strategySelect = document.getElementById("aiStrategySelect");
   const strategyInfoCard = document.getElementById("aiStrategyInfoCard");
   if (strategySelect && strategyInfoCard) {
     const updateStrategyCard = () => {
-      strategyInfoCard.innerHTML = STRATEGY_DESCRIPTIONS[strategySelect.value] || STRATEGY_DESCRIPTIONS.balanced;
+      strategyInfoCard.innerHTML =
+        STRATEGY_DESCRIPTIONS[strategySelect.value] ||
+        STRATEGY_DESCRIPTIONS.balanced;
     };
     strategySelect.addEventListener("change", updateStrategyCard);
     updateStrategyCard(); // Initialize
+  }
+
+  // M2: Hide strategy UI for non-comparison modules (strategy only applies to comparison charts)
+  const moduleTypeSelect = document.getElementById("aiModuleTypeSelect");
+  const strategyRow = document
+    .getElementById("aiStrategySelect")
+    ?.closest(".field-row");
+  const strategyInfoEl = document.getElementById("aiStrategyInfoCard");
+  if (moduleTypeSelect && strategyRow) {
+    const updateStrategyVisibility = () => {
+      const isComparison = moduleTypeSelect.value === "module-5";
+      strategyRow.classList.toggle("hidden", !isComparison);
+      if (strategyInfoEl)
+        strategyInfoEl.classList.toggle("hidden", !isComparison);
+    };
+    moduleTypeSelect.addEventListener("change", updateStrategyVisibility);
+    updateStrategyVisibility(); // Initialize on load
   }
 
   function showAIError(message) {
@@ -720,16 +831,17 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
           const title = document.createElement("div");
           title.className = "opp-group-title";
-          title.innerHTML = `${opp.groupName} <span class="opp-asin-count-badge">${opp.asins.length} ASINs</span>`;
+          title.textContent = opp.groupName;
+          const badge = document.createElement("span");
+          badge.className = "opp-asin-count-badge";
+          badge.textContent = ` ${opp.asins.length} ASINs`;
+          title.appendChild(badge);
 
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.checked = idx < 10;
           checkbox.dataset.idx = idx;
-          checkbox.setAttribute(
-            "aria-label",
-            `Select group: ${opp.groupName}`,
-          );
+          checkbox.setAttribute("aria-label", `Select group: ${opp.groupName}`);
 
           header.append(title, checkbox);
 
@@ -758,16 +870,17 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       if (proceedBtn) {
         const updateProceedState = () => {
-          const checkboxes = oppList.querySelectorAll(
-            'input[type="checkbox"]',
-          );
+          const checkboxes = oppList.querySelectorAll('input[type="checkbox"]');
           const selected = Array.from(checkboxes).filter((cb) => cb.checked);
 
           proceedBtn.disabled = selected.length === 0;
           proceedBtn.style.opacity = selected.length === 0 ? "0.5" : "1";
           proceedBtn.style.cursor =
             selected.length === 0 ? "not-allowed" : "pointer";
-          proceedBtn.textContent = selected.length > 0 ? `Generate ${selected.length} Charts →` : "Proceed to Generate Charts";
+          proceedBtn.textContent =
+            selected.length > 0
+              ? `Generate ${selected.length} Charts →`
+              : "Proceed to Generate Charts";
 
           // Limit selection to maximum 10 charts
           const isMaxReached = selected.length >= 10;
@@ -786,21 +899,31 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
           });
 
           if (toggleAllBtn) {
-            const allSelected = Array.from(checkboxes).every(cb => cb.checked || cb.disabled);
-            toggleAllBtn.textContent = allSelected && selected.length > 0 ? "☐ Deselect All" : "☑ Select All";
+            const allSelected = Array.from(checkboxes).every(
+              (cb) => cb.checked || cb.disabled,
+            );
+            toggleAllBtn.textContent =
+              allSelected && selected.length > 0
+                ? "☐ Deselect All"
+                : "☑ Select All";
           }
         };
 
         oppList.addEventListener("change", updateProceedState);
-        
+
         if (toggleAllBtn) {
           toggleAllBtn.onclick = () => {
-            const checkboxes = Array.from(oppList.querySelectorAll('input[type="checkbox"]'));
-            const currentlySelected = checkboxes.filter(cb => cb.checked).length;
-            const willSelectAll = currentlySelected < 10 && currentlySelected < checkboxes.length;
-            
+            const checkboxes = Array.from(
+              oppList.querySelectorAll('input[type="checkbox"]'),
+            );
+            const currentlySelected = checkboxes.filter(
+              (cb) => cb.checked,
+            ).length;
+            const willSelectAll =
+              currentlySelected < 10 && currentlySelected < checkboxes.length;
+
             let selectedCount = 0;
-            checkboxes.forEach(cb => {
+            checkboxes.forEach((cb) => {
               if (willSelectAll) {
                 if (selectedCount < 10) {
                   cb.checked = true;
@@ -847,23 +970,34 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
           const allProducts = parseAllProducts();
           if (!allProducts || allProducts.length === 0) {
-            alert("No spreadsheet product data available. Please upload a spreadsheet first.");
+            alert(
+              "No spreadsheet product data available. Please upload a spreadsheet first.",
+            );
             return;
           }
 
           proceedBtn.disabled = true;
-          const progressContainer = document.getElementById("aiProgressContainer");
+          const progressContainer = document.getElementById(
+            "aiProgressContainer",
+          );
           const progressText = document.getElementById("aiProgressText");
           if (progressContainer) progressContainer.classList.remove("hidden");
-          if (progressText) progressText.textContent = `Generating ${selectedGroups.length} charts...`;
+          if (progressText)
+            progressText.textContent = `Generating ${selectedGroups.length} charts...`;
           hideAIError();
 
           try {
-            const strategySelect =
-              document.getElementById("aiStrategySelect");
+            const strategySelect = document.getElementById("aiStrategySelect");
             const selectedStrategy = strategySelect
               ? strategySelect.value
               : "balanced";
+
+            const aiModuleSelect =
+              document.getElementById("aiModuleTypeSelect");
+            const selectedModule = aiModuleSelect
+              ? aiModuleSelect.value
+              : "module-5";
+
             await generateChartsForGroups(
               selectedGroups,
               allProducts,
@@ -872,6 +1006,7 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
               renderPreview,
               validateInputs,
               selectedStrategy,
+              selectedModule,
             );
             // Reset UI
             opportunitiesUI.classList.add("hidden");
@@ -908,10 +1043,15 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
         alert("No opportunities available to export.");
         return;
       }
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentOpportunities, null, 2));
+      const dataStr =
+        "data:text/json;charset=utf-8," +
+        encodeURIComponent(JSON.stringify(currentOpportunities, null, 2));
       const downloadAnchor = document.createElement("a");
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", "ASIN_Grouping_Opportunities.json");
+      downloadAnchor.setAttribute(
+        "download",
+        "ASIN_Grouping_Opportunities.json",
+      );
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -958,11 +1098,19 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
         try {
           const parsed = JSON.parse(event.target.result);
           // Validate structure
-          const isValidArray = Array.isArray(parsed) && parsed.every(item =>
-            item && typeof item === "object" && typeof item.groupName === "string" && Array.isArray(item.asins)
-          );
+          const isValidArray =
+            Array.isArray(parsed) &&
+            parsed.every(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                typeof item.groupName === "string" &&
+                Array.isArray(item.asins),
+            );
           if (!isValidArray) {
-            throw new Error("JSON structure must be an array of groups, each having 'groupName' (string) and 'asins' (array of strings).");
+            throw new Error(
+              "JSON structure must be an array of groups, each having 'groupName' (string) and 'asins' (array of strings).",
+            );
           }
 
           showOpportunities(parsed);
@@ -999,7 +1147,8 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       const progressContainer = document.getElementById("aiProgressContainer");
       const progressText = document.getElementById("aiProgressText");
       if (progressContainer) progressContainer.classList.remove("hidden");
-      if (progressText) progressText.textContent = "Step 1: Reading spreadsheet data...";
+      if (progressText)
+        progressText.textContent = "Step 1: Reading spreadsheet data...";
 
       try {
         const result = await new Promise((resolve) => {
@@ -1019,13 +1168,16 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
             Categories: p.Category || "",
           }))
           .slice(0, 50); // Cap at 50 ASINs for opportunities analysis
-          
-        if (progressText) progressText.textContent = "Step 2: Analyzing product groupings via AI...";
-        
-        const opportunities = await AIProvider.identifyOpportunities(
+
+        if (progressText)
+          progressText.textContent =
+            "Step 2: Analyzing product groupings via AI...";
+
+        const { data: opportunities, usage } = await AIProvider.identifyOpportunities(
           opportunitiesData,
           settings,
         );
+        updateTokenMetrics(usage);
 
         console.log("Identified opportunities:", opportunities);
         showOpportunities(opportunities);
@@ -1048,13 +1200,16 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     renderPreview,
     validateInputs,
     strategy = "balanced",
+    moduleId = "module-5",
   ) {
     const productMap = {};
     allProducts.forEach((p) => (productMap[p.ASIN] = p));
 
     const validChunks = groups
       .map((g) => {
-        const products = g.asins.map((asin) => productMap[asin]).filter(Boolean);
+        const products = g.asins
+          .map((asin) => productMap[asin])
+          .filter(Boolean);
         return { group: g, products };
       })
       .filter((entry) => entry.products.length >= 2)
@@ -1064,50 +1219,79 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
       throw new Error("No valid chunks with at least 2 products.");
     }
 
+    let aggregateUsage = { input: 0, output: 0 };
     const settledResults = await Promise.allSettled(
       validChunks.map(async (entry) => {
         const { group, products: chunk } = entry;
-        const chartResult = await AIProvider.generateChart(
+        const { data: chartResult, usage } = await AIProvider.generateChart(
           chunk,
           settings,
           strategy,
+          moduleId,
         );
 
-        // generateChart now returns { metrics, shortTitles }
-        const metricsArray = Array.isArray(chartResult) ? chartResult : (chartResult.metrics || []);
-        const shortTitles = (chartResult && !Array.isArray(chartResult)) ? (chartResult.shortTitles || {}) : {};
+        if (usage) {
+          aggregateUsage.input += usage.input || 0;
+          aggregateUsage.output += usage.output || 0;
+        }
 
         const asinsList = chunk.map((p) => p.ASIN);
-        // Use AI-generated short titles with Excel titles as fallback
-        const titlesList = chunk.map((p) => {
-          const aiTitle = shortTitles[p.ASIN];
-          return (aiTitle && aiTitle.trim()) ? aiTitle.trim() : p.Title;
-        });
-
         const baseAsin = asinsList[0];
         const sheetName =
           validChunks.length > 1
             ? `AI Chart - ${baseAsin}`
             : "AI Generated Chart";
 
-        return {
-          name: sheetName,
-          contentTitle: group.groupName || `AI Comp - ${baseAsin}`,
-          draftUrl: "",
-          previewUrl: "",
-          asins: asinsList,
-          highlightColumn: asinsList.map((_, i) => i === 0),
-          showReviews: true,
-          showPrices: true,
-          showAddToCart: true,
-          titles: titlesList,
-          attributes: metricsArray.map((m) => {
-            const values = asinsList.map((asin) => m.values[asin] || "");
-            return { name: m.metricName, values: values };
-          }),
-        };
+        if (moduleId === "module-5") {
+          // generateChart now returns { metrics, shortTitles }
+          const metricsArray = Array.isArray(chartResult)
+            ? chartResult
+            : chartResult.metrics || [];
+          const shortTitles =
+            chartResult && !Array.isArray(chartResult)
+              ? chartResult.shortTitles || {}
+              : {};
+
+          // Use AI-generated short titles with Excel titles as fallback
+          const titlesList = chunk.map((p) => {
+            const aiTitle = shortTitles[p.ASIN];
+            return aiTitle && aiTitle.trim() ? aiTitle.trim() : p.Title;
+          });
+
+          return {
+            name: sheetName,
+            moduleId: "module-5",
+            contentTitle: group.groupName || `AI Comp - ${baseAsin}`,
+            draftUrl: "",
+            previewUrl: "",
+            selected: true,
+            asins: asinsList,
+            highlightColumn: asinsList.map((_, i) => i === 0),
+            showReviews: true,
+            showPrices: true,
+            showAddToCart: true,
+            titles: titlesList,
+            attributes: metricsArray.map((m) => {
+              const values = asinsList.map((asin) => m.values[asin] || "");
+              return { name: m.metricName, values: values };
+            }),
+          };
+        } else {
+          // Generic Module
+          return {
+            name: sheetName,
+            moduleId: moduleId,
+            contentTitle: group.groupName || `AI Module - ${baseAsin}`,
+            draftUrl: "",
+            previewUrl: "",
+            selected: true,
+            fields: chartResult,
+          };
+        }
       }),
     );
+
+    updateTokenMetrics(aggregateUsage);
 
     const chartsArray = settledResults
       .filter((r) => r.status === "fulfilled")

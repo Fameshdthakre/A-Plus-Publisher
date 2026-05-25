@@ -4,7 +4,25 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
     window.aPlusAutomationLoaded = true;
     console.log("A-Plus Publisher: Automation Engine (Katal Edition) Loaded");
 
+    /** M5: Auto-detect Vendor vs Seller Central for preview URLs */
+    function buildPreviewUrl(url) {
+        if (!url) return "";
+        const match = url.match(/\/content\/([a-f0-9\-]{36})/i);
+        if (!match || !match[1]) return "";
+        
+        try {
+            const parsed = new URL(url);
+            return `https://${parsed.host}/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
+        } catch (e) {
+            const domain = url.includes("vendorcentral")
+                ? "vendorcentral.amazon.com"
+                : "sellercentral.amazon.com";
+            return `https://${domain}/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
+        }
+    }
+
     window.isStopped = false;
+    window.currentAutomationChart = null;
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === "PING") {
@@ -25,11 +43,12 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
 
     async function startAutomation(data) {
         const { chart } = data;
+        window.currentAutomationChart = chart;
 
         updateStatus(`Starting Automation for ${chart.name}...`, 10);
 
         try {
-            const isDashboard = window.location.href.includes('/aplus/content-manager');
+            const isDashboard = window.location.href.includes('/aplus/content-manager') || window.location.href.includes('/enhanced-content/content-manager');
 
             if (!chart.draftUrl && isDashboard) {
                 // Step 1: Click "Start creating A+ content"
@@ -114,10 +133,7 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
 
                 // Update chart URL properties
                 chart.draftUrl = newDraftUrl;
-                const match = newDraftUrl.match(/\/content\/([a-f0-9\-]{36})/i);
-                chart.previewUrl = match && match[1]
-                    ? `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`
-                    : "";
+                chart.previewUrl = buildPreviewUrl(newDraftUrl);
 
                 updateStatus("New draft saved! Proceeding with populate...", 27);
                 await wait(1000);
@@ -168,8 +184,12 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
 
             checkStopped();
 
-            updateStatus("Locating Comparison Chart...", 20);
-            let module = findElementDeep('div[data-component-id="comparison"]');
+            const moduleId = chart.moduleId || "module-5";
+            const isComparison = moduleId === "module-5";
+            const modSchema = chart.moduleSchema || { name: "Comparison Chart" };
+
+            updateStatus(`Locating module ${modSchema.name}...`, 20);
+            let module = await locateModuleContainer(chart, modSchema);
 
             if (!module) {
                 const moduleList = findElementDeep('div[data-component-id="module-list"]');
@@ -178,159 +198,163 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
                     : findAllElementsDeep('div[data-component-id="module-list"] div[data-component-id="editor-module"]');
                 console.log(`Checking module count: found ${existingModules.length} existing modules.`);
                 if (existingModules.length >= 5) {
-                    throw new Error("Limit reached: Max 5 modules are already added. Cannot add Comparison Chart.");
+                    throw new Error(`Limit reached: Max 5 modules are already added. Cannot add ${modSchema.name}.`);
                 }
 
-                updateStatus("Chart not found. Attempting to add...", 30);
-                await createComparisonChartModule();
-                module = await waitForElement('div[data-component-id="comparison"]', 5000);
+                updateStatus(`${modSchema.name} not found. Attempting to add...`, 30);
+                await createAplusModule(moduleId);
+                module = await waitForModuleContainer(chart, modSchema, 8000);
             }
 
-            if (!module) throw new Error("Comparison Chart module not found on page.");
+            if (!module) throw new Error(`${modSchema.name} module not found on page.`);
 
-            // Shift focus and visual view to the Comparison Chart module container
+            // Shift focus and visual view to the module container
             module.scrollIntoView({ behavior: 'smooth', block: 'center' });
             module.setAttribute('tabindex', '-1');
             module.focus();
             await new Promise(r => setTimeout(r, 500)); // Brief pause to let transition complete
 
-            // 0. Populate ALL Checkboxes (Highlight 1-6 + Show Reviews/Prices/Cart)
-            // The chart module has exactly 9 kat-checkbox elements in DOM order:
-            //   [0-5] Highlight checkbox for columns 1-6
-            //   [6]   Show Reviews
-            //   [7]   Show Prices
-            //   [8]   Show Add To Cart Button
-            updateStatus("Setting Chart Checkboxes...", 35);
+            if (isComparison) {
+                // 0. Populate ALL Checkboxes (Highlight 1-6 + Show Reviews/Prices/Cart)
+                // The chart module has exactly 9 kat-checkbox elements in DOM order:
+                //   [0-5] Highlight checkbox for columns 1-6
+                //   [6]   Show Reviews
+                //   [7]   Show Prices
+                //   [8]   Show Add To Cart Button
+                updateStatus("Setting Chart Checkboxes...", 35);
 
-            // Build the 9-element boolean state map from parsed data
-            const checkboxStates = buildCheckboxStateMap(chart);
-            const allCheckboxes = module.querySelectorAll('kat-checkbox[data-component-id="checkbox"]');
+                // Build the 9-element boolean state map from parsed data
+                const checkboxStates = buildCheckboxStateMap(chart);
+                const allCheckboxes = module.querySelectorAll('kat-checkbox[data-component-id="checkbox"]');
 
-            updateStatus(`Found ${allCheckboxes.length} checkboxes, applying ${checkboxStates.length} states...`, 36);
-            const limit = Math.min(checkboxStates.length, allCheckboxes.length);
-            for (let ci = 0; ci < limit; ci++) {
-                checkStopped();
-                await toggleKatalCheckbox(allCheckboxes[ci], checkboxStates[ci]);
-            }
-
-            // 1. Populate Header Fields (ASINs only; Product Titles are deferred to the end)
-            updateStatus("Populating ASINs...", 40);
-            for (let i = 0; i < 6; i++) {
-                checkStopped();
-                const index = i + 1;
-
-                // ASIN
-                if (chart.asins && chart.asins[i]) {
-                    const asinContainer = module.querySelector(`[data-component-id="product-asin-${index}"]`);
-                    if (asinContainer) {
-                        const input = asinContainer.querySelector('kat-input[data-component-id="input"]') || asinContainer.querySelector('kat-input');
-                        await fillKatalInput(input, chart.asins[i]);
-                    }
+                updateStatus(`Found ${allCheckboxes.length} checkboxes, applying ${checkboxStates.length} states...`, 36);
+                const limit = Math.min(checkboxStates.length, allCheckboxes.length);
+                for (let ci = 0; ci < limit; ci++) {
+                    checkStopped();
+                    await toggleKatalCheckbox(allCheckboxes[ci], checkboxStates[ci]);
                 }
 
-                // Note: Highlight checkboxes are now handled in the unified checkbox map above (step 0).
+                // 1. Populate Header Fields (ASINs only; Product Titles are deferred to the end)
+                updateStatus("Populating ASINs...", 40);
+                for (let i = 0; i < 6; i++) {
+                    checkStopped();
+                    const index = i + 1;
 
-                // Clear competitor column if not needed (to avoid leftover data from previous draft runs)
-                if (index > 1 && (!chart.asins || !chart.asins[i])) {
-                    const asinContainer = module.querySelector(`[data-component-id="product-asin-${index}"]`);
-                    if (asinContainer) {
-                        let competitorCol = asinContainer.parentElement;
-                        let clearBtn = null;
-                        // Climb up the DOM tree to find the column container holding the clear button
-                        for (let depth = 0; depth < 5; depth++) {
-                            if (!competitorCol || competitorCol === module) break;
-                            clearBtn = competitorCol.querySelector('kat-button');
-                            if (clearBtn) break;
-                            competitorCol = competitorCol.parentElement;
+                    // ASIN
+                    if (chart.asins && chart.asins[i]) {
+                        const asinContainer = module.querySelector(`[data-component-id="product-asin-${index}"]`);
+                        if (asinContainer) {
+                            const input = asinContainer.querySelector('kat-input[data-component-id="input"]') || asinContainer.querySelector('kat-input');
+                            await fillKatalInput(input, chart.asins[i]);
                         }
+                    }
 
-                        if (competitorCol) {
-                            const input = asinContainer.querySelector('kat-input');
-                            // Only click clear if the column is currently populated to optimize performance
-                            if (clearBtn && input && input.value) {
-                                updateStatus(`Clearing leftover Column ${index}...`, 42);
-                                clearBtn.click();
-                                await new Promise(r => setTimeout(r, 600));
+                    // Clear competitor column if not needed (to avoid leftover data from previous draft runs)
+                    if (index > 1 && (!chart.asins || !chart.asins[i])) {
+                        const asinContainer = module.querySelector(`[data-component-id="product-asin-${index}"]`);
+                        if (asinContainer) {
+                            let competitorCol = asinContainer.parentElement;
+                            let clearBtn = null;
+                            // Climb up the DOM tree to find the column container holding the clear button
+                            for (let depth = 0; depth < 5; depth++) {
+                                if (!competitorCol || competitorCol === module) break;
+                                clearBtn = competitorCol.querySelector('kat-button');
+                                if (clearBtn) break;
+                                competitorCol = competitorCol.parentElement;
+                            }
+
+                            if (competitorCol) {
+                                const input = asinContainer.querySelector('kat-input');
+                                // Only click clear if the column is currently populated to optimize performance
+                                if (clearBtn && input && input.value) {
+                                    updateStatus(`Clearing leftover Column ${index}...`, 42);
+                                    clearBtn.click();
+                                    await new Promise(r => setTimeout(r, 600));
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // 2. Populate Attributes (Metrics)
-            updateStatus("Preparing Metric Rows...", 55);
-            const attributeRows = chart.attributes || [];
+                // 2. Populate Attributes (Metrics)
+                updateStatus("Preparing Metric Rows...", 55);
+                const attributeRows = chart.attributes || [];
 
-            // Ensure we have enough metric rows created
-            const existingMetricsCount = module.querySelectorAll('[data-component-id^="comparison-metric-"]').length;
-            if (existingMetricsCount < attributeRows.length) {
-                let addBtn = null;
-                const btns = module.querySelectorAll('kat-button');
-                for (const b of btns) {
-                    if (b.innerText.trim().toLowerCase() === 'add metric') {
-                        addBtn = b;
-                        break;
+                // Ensure we have enough metric rows created
+                const existingMetricsCount = module.querySelectorAll('[data-component-id^="comparison-metric-"]').length;
+                if (existingMetricsCount < attributeRows.length) {
+                    let addBtn = null;
+                    const btns = module.querySelectorAll('kat-button');
+                    for (const b of btns) {
+                        if (b.innerText.trim().toLowerCase() === 'add metric') {
+                            addBtn = b;
+                            break;
+                        }
                     }
-                }
-                if (addBtn) {
-                    const addCount = attributeRows.length - existingMetricsCount;
-                    updateStatus(`Adding ${addCount} metric row(s)...`, 58);
-                    for (let k = 0; k < addCount; k++) {
-                        addBtn.click();
-                        await waitForElementsCount('[data-component-id^="comparison-metric-"]', existingMetricsCount + k + 1, module);
-                    }
-                }
-            }
-
-            updateStatus("Populating Metrics...", 60);
-            for (let i = 0; i < attributeRows.length; i++) {
-                checkStopped();
-                const attr = attributeRows[i];
-                const metricIndex = i + 1;
-                const metricContainer = module.querySelector(`[data-component-id="comparison-metric-${metricIndex}"]`);
-
-                if (metricContainer) {
-                    // Fill Metric Name
-                    const nameInput = metricContainer.querySelector('kat-input[data-component-id="input"]') || metricContainer.querySelector('kat-input');
-                    await fillKatalInput(nameInput, attr.name);
-
-                    // Find the row (parent of the metric name container is the column, parent of that is the row)
-                    const columnDiv = metricContainer.closest('div[style*="width: 16.6667%"]') || metricContainer.parentElement;
-                    const row = columnDiv.parentElement;
-                    const cells = Array.from(row.children).filter(child => child !== columnDiv);
-
-                    // Limit cell population strictly to the number of active ASIN columns specified in Excel
-                    const limit = Math.min((attr.values || []).length, cells.length, (chart.asins || []).length);
-                    for (let j = 0; j < limit; j++) {
-                        const cell = cells[j];
-                        const val = attr.values[j];
-
-                        if (val === undefined || val === null) continue;
-
-                        // Each cell has a kat-dropdown to select type (Text, Checkmark, etc.)
-                        const dropdown = cell.querySelector('kat-dropdown');
-                        if (dropdown) {
-                            await handleMetricValue(cell, dropdown, val);
+                    if (addBtn) {
+                        const addCount = attributeRows.length - existingMetricsCount;
+                        updateStatus(`Adding ${addCount} metric row(s)...`, 58);
+                        for (let k = 0; k < addCount; k++) {
+                            addBtn.click();
+                            await waitForElementsCount('[data-component-id^="comparison-metric-"]', existingMetricsCount + k + 1, module);
                         }
                     }
                 }
-                updateStatus(`Populating Metrics (${i + 1}/${attributeRows.length})...`, 60 + (i / attributeRows.length) * 30);
-            }
 
-            // 3. Populate All Titles (Product Titles & A+ Content Title) after all table metrics are inserted
-            updateStatus("Populating Product Column Titles...", 91);
-            for (let i = 0; i < 6; i++) {
-                checkStopped();
-                const index = i + 1;
+                updateStatus("Populating Metrics...", 60);
+                for (let i = 0; i < attributeRows.length; i++) {
+                    checkStopped();
+                    const attr = attributeRows[i];
+                    const metricIndex = i + 1;
+                    const metricContainer = module.querySelector(`[data-component-id="comparison-metric-${metricIndex}"]`);
 
-                // Title
-                if (chart.titles && chart.titles[i]) {
-                    const titleContainer = module.querySelector(`[data-component-id="product-title-${index}"]`);
-                    if (titleContainer) {
-                        const input = titleContainer.querySelector('kat-input[data-component-id="input"]') || titleContainer.querySelector('kat-input');
-                        await fillKatalInput(input, chart.titles[i]);
+                    if (metricContainer) {
+                        // Fill Metric Name
+                        const nameInput = metricContainer.querySelector('kat-input[data-component-id="input"]') || metricContainer.querySelector('kat-input');
+                        await fillKatalInput(nameInput, attr.name);
+
+                        // Find the row (parent of the metric name container is the column, parent of that is the row)
+                        const columnDiv = metricContainer.closest('div[style*="width: 16.6667%"]') || metricContainer.parentElement;
+                        const row = columnDiv.parentElement;
+                        const cells = Array.from(row.children).filter(child => child !== columnDiv);
+
+                        // Limit cell population strictly to the number of active ASIN columns specified in Excel
+                        const limit = Math.min((attr.values || []).length, cells.length, (chart.asins || []).length);
+                        for (let j = 0; j < limit; j++) {
+                            const cell = cells[j];
+                            const val = attr.values[j];
+
+                            if (val === undefined || val === null) continue;
+
+                            // Each cell has a kat-dropdown to select type (Text, Checkmark, etc.)
+                            const dropdown = cell.querySelector('kat-dropdown');
+                            if (dropdown) {
+                                await handleMetricValue(cell, dropdown, val);
+                            }
+                        }
+                    }
+                    updateStatus(`Populating Metrics (${i + 1}/${attributeRows.length})...`, 60 + (i / attributeRows.length) * 30);
+                }
+
+                // 3. Populate All Titles (Product Titles & A+ Content Title) after all table metrics are inserted
+                updateStatus("Populating Product Column Titles...", 91);
+                for (let i = 0; i < 6; i++) {
+                    checkStopped();
+                    const index = i + 1;
+
+                    // Title
+                    if (chart.titles && chart.titles[i]) {
+                        const titleContainer = module.querySelector(`[data-component-id="product-title-${index}"]`);
+                        if (titleContainer) {
+                            const input = titleContainer.querySelector('kat-input[data-component-id="input"]') || titleContainer.querySelector('kat-input');
+                            await fillKatalInput(input, chart.titles[i]);
+                        }
                     }
                 }
+            } else {
+                // Populate generic module
+                updateStatus(`Populating fields for ${modSchema.name}...`, 45);
+                await populateGenericModule(module, chart, modSchema);
             }
 
             if (chart.contentTitle) {
@@ -375,10 +399,7 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             const finalUrl = window.location.href;
             if (finalUrl) {
                 chart.draftUrl = finalUrl;
-                const match = finalUrl.match(/\/content\/([a-f0-9\-]{36})/i);
-                if (match && match[1]) {
-                    chart.previewUrl = `https://vendorcentral.amazon.com/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
-                }
+                chart.previewUrl = buildPreviewUrl(finalUrl);
             }
 
             updateStatus(`Chart ${chart.name} Complete!`, 100);
@@ -512,7 +533,43 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
         await wait(200);
     }
 
-    async function createComparisonChartModule() {
+    async function locateModuleContainer(chart, mod) {
+        // Find all editor modules
+        const existingModules = findAllElementsDeep('div[data-component-id="editor-module"]');
+        if (existingModules.length === 0) return null;
+
+        // If comparison chart (module-5), it has a specific component ID
+        if (chart.moduleId === "module-5") {
+            const comp = findElementDeep('div[data-component-id="comparison"]');
+            if (comp) return comp;
+        }
+
+        const nameLower = String(mod.name || '').toLowerCase();
+        const shortLower = String(mod.shortName || '').toLowerCase();
+
+        for (const moduleEl of existingModules) {
+            // Check if this module header/text contains the name or shortName
+            const text = (moduleEl.textContent || '').toLowerCase();
+            if (text.includes(nameLower) || (shortLower && text.includes(shortLower))) {
+                return moduleEl;
+            }
+        }
+
+        // No match found — return null so caller can create the correct module
+        return null;
+    }
+
+    async function waitForModuleContainer(chart, modSchema, timeout = 10000) {
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+            const container = await locateModuleContainer(chart, modSchema);
+            if (container) return container;
+            await wait(200);
+        }
+        return null;
+    }
+
+    async function createAplusModule(moduleId) {
         updateStatus("Looking for Add Module button...", 25);
         const addBtn = findElementDeep('div[data-component-id="add-module-button"] div[role="button"] span')
             || findElementDeep('div[data-component-id="add-module-button"]')
@@ -527,24 +584,104 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             updateStatus("Waiting for module picker modal...", 28);
             const modal = await waitForElement('[data-component-id="add-module-modal"]', 8000);
             if (!modal) {
-                throw new Error("Module picker modal (add-module-modal) did not open in time.");
+                updateStatus("Error: Module picker modal did not open. The page layout may have changed.", 28);
+                throw new Error("Module picker modal (add-module-modal) did not open in time. Try refreshing the A+ draft page.");
             }
 
-            updateStatus("Selecting Standard Comparison Chart...", 30);
-            // Search scoped to the modal first, then globally
-            const moduleBtn = modal.querySelector('[data-component-id="module-5"]')
-                || modal.querySelector('div[role="button"][data-component-id="module-5"]')
-                || await waitForElement('[data-component-id="module-5"]', 5000, modal);
+            updateStatus(`Selecting module ${moduleId}...`, 30);
+            const moduleBtn = modal.querySelector(`[data-component-id="${moduleId}"]`)
+                || modal.querySelector(`div[role="button"][data-component-id="${moduleId}"]`)
+                || await waitForElement(`[data-component-id="${moduleId}"]`, 5000, modal);
 
             if (moduleBtn) {
                 moduleBtn.click();
-                // Wait for the modal to close and the module to render on the page
                 await wait(2000);
             } else {
-                throw new Error("Comparison chart module (module-5) not found in the modal.");
+                updateStatus(`Error: Module "${moduleId}" not found in the picker modal.`, 30);
+                throw new Error(`Module button for ${moduleId} not found in the modal. This module type may not be available for your account.`);
             }
         } else {
-            throw new Error("Add module button not found.");
+            updateStatus("Error: 'Add Module' button not found on this page.", 25);
+            throw new Error("Add Module button not found. Ensure you are on an A+ Content draft editing page.");
+        }
+    }
+
+    async function populateGenericModule(moduleContainer, chart, mod) {
+        const populatedInputs = new Set();
+
+        for (const field of mod.fields) {
+            checkStopped();
+            if (field.type === 'image') continue;
+
+            const isRepeating = field.repeat && field.repeat > 1;
+            const repeatCount = isRepeating ? field.repeat : 1;
+            
+            for (let r = 0; r < repeatCount; r++) {
+                const val = isRepeating ? (chart.fields[field.key] ? chart.fields[field.key][r] || "" : "") : (chart.fields[field.key] || "");
+                
+                // Resolve componentId
+                let resolvedId = field.componentId || "";
+                if (isRepeating && resolvedId.includes('{i}')) {
+                    resolvedId = resolvedId.replace('{i}', r + 1);
+                }
+
+                if (!resolvedId) {
+                    console.warn(`A-Plus Publisher: Field ${field.label} missing componentId. Skipping.`);
+                    continue;
+                }
+
+                // Locate the exact container
+                const container = findElementDeep(`[data-component-id="${resolvedId}"]`, moduleContainer);
+                if (!container) {
+                    console.warn(`A-Plus Publisher: Container for ${resolvedId} not found in DOM.`);
+                    continue;
+                }
+
+                // If componentKey is provided, narrow down within container
+                let targetEl = container;
+                if (field.componentKey) {
+                    // It could be that the container itself has the componentKey
+                    if (container.getAttribute('data-component-key') === field.componentKey) {
+                        targetEl = container;
+                    } else {
+                        const keyMatch = findElementDeep(`[data-component-key="${field.componentKey}"]`, container);
+                        if (keyMatch) targetEl = keyMatch;
+                    }
+                }
+
+                // Now locate the actual native input element within targetEl
+                let targetInput = null;
+                const tag = targetEl.tagName.toLowerCase();
+                if (tag === 'kat-input' || tag === 'kat-textarea' || tag === 'input' || tag === 'textarea') {
+                    targetInput = targetEl;
+                } else {
+                    const possibleInputs = findAllElementsDeep('kat-input, kat-textarea, input, textarea', targetEl)
+                        .filter(el => {
+                            const type = el.getAttribute('type') || '';
+                            if (type === 'checkbox' || type === 'radio' || type === 'file' || type === 'submit' || type === 'button') {
+                                return false;
+                            }
+                            if (el.closest('kat-dropdown') || el.closest('kat-button')) {
+                                return false;
+                            }
+                            return true;
+                        });
+
+                    if (possibleInputs.length > 0) {
+                        // Usually the first matching input inside the container is the correct one
+                        targetInput = possibleInputs[0];
+                    }
+                }
+
+                if (targetInput && !populatedInputs.has(targetInput)) {
+                    populatedInputs.add(targetInput);
+                    const logLabel = isRepeating ? `${field.label} ${r + 1}` : field.label;
+                    updateStatus(`Populating ${logLabel}...`, 45);
+                    await fillKatalInput(targetInput, val);
+                } else {
+                    console.warn(`A-Plus Publisher: Input element for ${resolvedId} not found or already populated.`);
+                }
+            }
         }
     }
 
@@ -762,5 +899,110 @@ if (typeof window.aPlusAutomationLoaded === 'undefined') {
             }
         }
     }
+
+    // ── Alt Text Prefill Helper for Manual/Semi-automated Image Uploads ──
+    let lastClickedAltText = "";
+
+    document.addEventListener('click', (event) => {
+        try {
+            const chart = window.currentAutomationChart;
+            if (!chart || !chart.fields || !chart.moduleSchema) return;
+
+            let target = event.target;
+            let imageSlotEl = null;
+            while (target && target !== document.body) {
+                const compId = target.getAttribute('data-component-id');
+                if (compId && (compId.includes('image') || compId === 'companyLogo')) {
+                    imageSlotEl = target;
+                    break;
+                }
+                target = target.parentElement;
+            }
+
+            if (!imageSlotEl) return;
+
+            const clickedId = imageSlotEl.getAttribute('data-component-id');
+            const mod = chart.moduleSchema;
+
+            for (const field of mod.fields) {
+                if (field.type !== 'image') continue;
+
+                if (field.repeat && field.repeat > 1) {
+                    for (let r = 0; r < field.repeat; r++) {
+                        const resolvedId = field.componentId.replace('{i}', r + 1);
+                        if (resolvedId === clickedId) {
+                            const altKey = `${field.key}_alt`;
+                            const altVal = chart.fields[altKey] ? (chart.fields[altKey][r] || "") : "";
+                            lastClickedAltText = altVal;
+                            console.log(`A-Plus Publisher: Registered Alt Text for slot ${clickedId}: "${altVal}"`);
+                            return;
+                        }
+                    }
+                } else {
+                    if (field.componentId === clickedId) {
+                        const altKey = `${field.key}_alt`;
+                        const altVal = chart.fields[altKey] || "";
+                        lastClickedAltText = altVal;
+                        console.log(`A-Plus Publisher: Registered Alt Text for slot ${clickedId}: "${altVal}"`);
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("A-Plus Publisher: Alt text tracking error ignored:", e);
+        }
+    }, true);
+
+    function tryFillAltTextInModal(modal) {
+        try {
+            if (!lastClickedAltText) return;
+
+            const altInput = modal.querySelector('[data-component-id="image-keywords"] kat-input') ||
+                             modal.querySelector('kat-input[placeholder*="alt" i]') ||
+                             modal.querySelector('kat-input[data-component-id="input"]');
+
+            if (altInput) {
+                altInput.value = lastClickedAltText;
+                altInput.dispatchEvent(new Event('input', { bubbles: true }));
+                altInput.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(`A-Plus Publisher: Auto-filled Alt Text: "${lastClickedAltText}"`);
+            }
+        } catch (e) {
+            console.warn("A-Plus Publisher: Failed to fill alt text, skipping:", e);
+        }
+    }
+
+    const modalObserver = new MutationObserver((mutations) => {
+        try {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        const modal = node.querySelector('[data-component-id="image-modal"]') ||
+                                      (node.getAttribute('data-component-id') === 'image-modal' ? node : null);
+                        if (modal) {
+                            setTimeout(() => tryFillAltTextInModal(modal), 300);
+                        }
+                    }
+                } else if (mutation.type === 'attributes') {
+                    const target = mutation.target;
+                    if (target.nodeType === Node.ELEMENT_NODE &&
+                        target.getAttribute('data-component-id') === 'image-modal' &&
+                        target.getAttribute('visible') === 'true') {
+                        setTimeout(() => tryFillAltTextInModal(target), 300);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("A-Plus Publisher: Modal observer error ignored:", e);
+        }
+    });
+
+    modalObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['visible', 'class', 'style']
+    });
 
 } // End of window.aPlusAutomationLoaded check

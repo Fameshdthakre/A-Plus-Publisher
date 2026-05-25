@@ -1,363 +1,911 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A-Plus Publisher</title>
-    <link rel="icon" type="image/png" href="../icons/icon16.png">
-    <link rel="stylesheet" href="sidepanel.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A-Plus Publisher Pro</title>
+    <link rel="icon" type="image/png" href="../icons/icon16.png" />
+    <link rel="stylesheet" href="sidepanel.css" />
     <!-- Local SheetJS for Excel Parsing (CSP Compliant) -->
     <script src="../libs/xlsx.full.min.js"></script>
-</head>
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <header>
-            <h1>A+ Publisher</h1>
-            <p class="subtitle">Comparison Chart Pro</p>
-        </header>
+      <header>
+        <div>
+          <h1
+            style="
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              flex-wrap: wrap;
+            "
+          >
+            A+ Publisher Pro
+            <span id="app-version-badge" class="version-badge">v1.0.0</span>
+          </h1>
+          <p class="subtitle">All Modules · AI Powered</p>
+        </div>
+        <button
+          id="btn-feedback"
+          class="btn-feedback-top"
+          tabindex="0"
+          role="button"
+          aria-label="Submit feedback"
+        >
+          💬 Feedback
+        </button>
+      </header>
 
-        <nav class="tabs">
-            <button class="tab-btn active" data-target="tab-publisher">📋 Publisher</button>
-            <button class="tab-btn" data-target="tab-generator">🧠 AI Generator</button>
-            <button class="tab-btn" data-target="tab-history">📜 History</button>
-            <button class="tab-btn" data-target="tab-settings">⚙ Settings</button>
-        </nav>
+      <nav class="tabs">
+        <button class="tab-btn active" data-target="tab-publisher">
+          📋 Publisher
+        </button>
+        <button class="tab-btn" data-target="tab-generator">
+          🧠 AI Generator
+        </button>
+        <button class="tab-btn" data-target="tab-history">📜 History</button>
+        <button class="tab-btn" data-target="tab-settings">⚙ Settings</button>
+      </nav>
 
-        <main>
-            <div id="tab-publisher" class="tab-content active">
-                <section class="card resume-card hidden" id="resumeCard">
-                    <div class="card-header">
-                        <h3>Pending Automation</h3>
-                    </div>
-                    <div class="card-content">
-                        <p id="resumeText">You have unfinished charts in the queue.</p>
-                        <button id="resumeBtn" class="btn-primary btn-full">Resume Automation</button>
-                        <button id="discardQueueBtn" class="btn-text btn-full-width-spaced">Discard Queue</button>
-                    </div>
-                </section>
-
-                <section class="card dropzone-card" id="dropzone">
-                    <div class="dropzone-content">
-                        <div class="icon icon-pulse">📁</div>
-                        <h3>Drop Excel File</h3>
-                        <p>Drag & drop your .xlsx here</p>
-                        <input type="file" id="fileInput" accept=".xlsx, .xls" hidden>
-                    </div>
-                    <div class="card-footer">
-                        <button id="downloadTemplate" class="btn-secondary btn-full">Download Template (.xlsx)</button>
-                    </div>
-                </section>
-
-                <!-- Robust Data Preview (accordion per chart) -->
-                <section class="hidden" id="dataPreview">
-                    <div class="preview-toolbar">
-                        <h3>Data Preview</h3>
-                        <div class="flex-center-gap">
-                            <span class="chart-count-badge" id="chartCountBadge">0 charts</span>
-                            <button class="btn-text d-none" id="downloadAllChartsBtn"
-                                title="Download all charts as a single Excel file with one tab per chart">📦 Download
-                                All (.xlsx)</button>
-                            <button class="btn-text" id="toggleAllCharts">☑ Select All</button>
-                            <button class="btn-text" id="clearData">✕ Clear</button>
-                        </div>
-                    </div>
-                    <div class="sandbox-toggle-bar">
-                        <span class="sandbox-toggle-title">💡 Live Amazon Sandbox</span>
-                        <div class="sandbox-btn-group">
-                            <button id="btnSandboxDesktop" class="btn-sm active"
-                                title="Switch to emulated Amazon desktop grid view">🖥 Desktop View</button>
-                            <button id="btnSandboxMobile" class="btn-sm"
-                                title="Switch to emulated Amazon mobile card swipe view">📱 Mobile View</button>
-                        </div>
-                    </div>
-                    <div class="preview-container" id="previewContainer">
-                        <!-- Accordion chart cards rendered here by JS -->
-                    </div>
-                </section>
-
-                <section class="card validation-card hidden" id="validationCard">
-                    <div class="card-header">
-                        <h3>⚠ Validation Issues</h3>
-                    </div>
-                    <ul class="validation-list" id="validationList"></ul>
-                </section>
-
-                <section class="card results-card hidden" id="resultsCard">
-                    <div class="card-header">
-                        <h3>🎉 Processing Complete</h3>
-                    </div>
-                    <div class="card-content">
-                        <div id="resultsList" class="results-list-container"></div>
-                        <div class="btn-group">
-                            <button id="bulkOpenBtn" class="btn-primary">Bulk Open Previews</button>
-                            <button id="downloadCsvBtn" class="btn-secondary">Download CSV</button>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="action-panel">
-                    <div class="btn-group">
-                        <button id="startBtn" class="btn-primary" disabled>Start Automation</button>
-                        <button id="stopBtn" class="btn-primary hidden">Stop Automation</button>
-                    </div>
-                    <div id="statusContainer" class="status-container hidden">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill"></div>
-                        </div>
-                        <p id="statusText">Ready to start...</p>
-                        <div id="logContainer" class="log-container">
-                            <ul id="logList" class="log-list"></ul>
-                        </div>
-                    </div>
-                </section>
-            </div> <!-- End tab-publisher -->
-
-            <div id="tab-generator" class="tab-content">
-                <section class="card" id="aiGeneratorCard">
-                    <div class="card-header">
-                        <h3>AI Chart Generator</h3>
-                    </div>
-                    <div class="card-content card-content-gap">
-                        <p class="note-text-center">Note: Only the first 50 rows will be analyzed for opportunities.</p>
-
-                        <!-- Error Display Area -->
-                        <div id="aiErrorDiv" class="hidden ai-error-banner">
-                            <span class="large-emoji">⚠️</span>
-                            <span id="aiErrorText"></span>
-                        </div>
-
-                        <div class="dropzone-card" id="aiDropzone">
-                            <div class="dropzone-content">
-                                <div class="icon icon-pulse">📊</div>
-                                <h3>Drop Product Data Excel</h3>
-                                <p>Select file to map columns</p>
-                                <input type="file" id="aiFileInput" accept=".xlsx, .xls" hidden>
-                            </div>
-                        </div>
-                        <div id="aiMappingUI" class="hidden">
-                            <div class="field-row">
-                                <label class="field-label">Sheet</label>
-                                <select id="aiSheetSelect" class="field-input" title="Select Sheet"></select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">Header Row</label>
-                                <input type="number" id="aiHeaderRow" class="field-input" value="1" min="1"
-                                    title="Header Row">
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">AI CRO Strategy</label>
-                                <select id="aiStrategySelect" class="field-input" title="Select AI CRO Strategy">
-                                    <option value="balanced">Balanced CRO (Standard)</option>
-                                    <option value="premium">Premium Justification (Quality & Materials)</option>
-                                    <option value="technical">Technical Focus (Detailed Specs)</option>
-                                    <option value="usability">Usability & Lifestyle (Comfort & Daily Use)</option>
-                                </select>
-                            </div>
-                            <div id="aiStrategyInfoCard" class="strategy-info-card">
-                                <!-- Populated dynamically by JS -->
-                            </div>
-                            <div class="section-header-row mt-05">
-                                <span class="section-label">Map Columns</span>
-                                <button id="aiAutoMapBtn" class="btn-auto-map" type="button"
-                                    title="One-click intelligent column mapping based on keywords and data pattern checks">⚡
-                                    Smart Auto-Map</button>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>ASIN <span class="required-dot">*</span></span>
-                                    <span class="label-sub">Product code</span>
-                                </label>
-                                <select id="mapAsin" class="field-input" title="Map ASIN Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>Category <span class="required-dot">*</span></span>
-                                    <span class="label-sub">Product niche</span>
-                                </label>
-                                <select id="mapCategory" class="field-input" title="Map Category Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>Title <span class="required-dot">*</span></span>
-                                    <span class="label-sub">Product name</span>
-                                </label>
-                                <select id="mapTitle" class="field-input" title="Map Title Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>Bullets <span class="required-dot">*</span></span>
-                                    <span class="label-sub">Key features</span>
-                                </label>
-                                <select id="mapBullets" class="field-input" title="Map Bullets Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>Description <span class="required-dot">*</span></span>
-                                    <span class="label-sub">Detailed copy</span>
-                                </label>
-                                <select id="mapDesc" class="field-input" title="Map Description Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label class="field-label">
-                                    <span>Specs</span>
-                                    <span class="label-sub">Technical details</span>
-                                </label>
-                                <select id="mapSpecs" class="field-input" title="Map Specs Column">
-                                    <option value="">--Select--</option>
-                                </select>
-                            </div>
-                            <button id="generateChartBtn" class="btn-primary mt-1">Analyze
-                                Opportunities</button>
-                            <div id="aiMappingValidationHelper" class="validation-helper-text">
-                                <span>⚠️ Map ASIN, Category, Title, Bullets, & Description to proceed</span>
-                            </div>
-                            <div id="aiProgressContainer" class="ai-progress-container hidden">
-                                <div class="step-text" id="aiProgressText">Analyzing product data...</div>
-                            </div>
-                            <div class="flex-center-gap mt-05">
-                                <button id="importOppBtn" class="btn-secondary btn-full" type="button">📥 Import Saved
-                                    Groups (.json)</button>
-                                <input type="file" id="importOppFile" accept=".json" hidden>
-                            </div>
-                            <button id="aiChangeFileBtn" class="btn-text btn-full mt-05">✕ Change File</button>
-                        </div>
-
-                        <!-- Opportunities UI -->
-                        <div id="aiOpportunitiesUI" class="hidden ai-opportunities-container">
-                            <div class="callout callout-accent ai-callout-banner" id="aiOppCallout">
-                                <span class="callout-icon large-emoji">💡</span>
-                                <span id="aiOppText" class="font-semibold">Found opportunities!</span>
-                            </div>
-                            <div class="flex-center-gap mb-1">
-                                <button id="aiToggleSelectAllBtn" class="btn-text" type="button">☑ Select All</button>
-                                <div class="flex-spacer"></div>
-                                <button id="exportOppBtn" class="btn-secondary" type="button">📤 Export Groups
-                                    JSON</button>
-                            </div>
-                            <div id="aiOppList" class="ai-opp-list">
-                                <!-- Opportunities will be rendered here -->
-                            </div>
-                            <button id="proceedGenerateBtn" class="btn-primary mt-15">Proceed to Generate
-                                Charts</button>
-                            <button id="aiClearOppBtn" class="btn-text btn-full mt-05">✕ Clear & Reset</button>
-                        </div>
-                    </div>
-                </section>
-            </div> <!-- End tab-generator -->
-
-            <!-- ═══ HISTORY TAB ═══════════════════════════════════════════ -->
-            <div id="tab-history" class="tab-content">
-                <div class="history-toolbar">
-                    <h3 class="preview-toolbar-title">Session History</h3>
-                    <div class="history-filter-bar">
-                        <button class="history-filter-btn active" data-filter="all">All</button>
-                        <button class="history-filter-btn" data-filter="ai_generation">🧠 AI</button>
-                        <button class="history-filter-btn" data-filter="run">▶ Runs</button>
-                        <button class="history-filter-btn" data-filter="import">📂 Imports</button>
-                    </div>
-                    <button class="btn-text btn-clear-history" id="clearAllHistoryBtn">🗑
-                        Clear All</button>
-                </div>
-                <div id="historyList" class="history-list">
-                    <!-- Populated by renderHistory() in sidepanel.js -->
-                    <div class="history-empty" id="historyEmpty">
-                        <div class="history-empty-icon icon-pulse">📄</div>
-                        <p>No history yet.</p>
-                        <p class="history-empty-sub">AI generations, automation runs, and imports will appear here.</p>
-                    </div>
-                </div>
-            </div> <!-- End tab-history -->
-
-            <div id="tab-settings" class="tab-content">
-                <section class="card" id="settingsCard">
-                    <div class="card-header">
-                        <h3>AI Configuration</h3>
-                    </div>
-                    <div class="card-content card-content-gap">
-                        <div class="field-row">
-                            <label class="field-label">AI Platform</label>
-                            <select id="aiPlatformSelect" class="field-input" title="Select AI Platform">
-                                <option value="openai">OpenAI (GPT-4o)</option>
-                                <option value="gemini">Google Gemini</option>
-                                <option value="claude">Anthropic Claude</option>
-                            </select>
-                        </div>
-                        <div class="field-row" id="openaiKeyRow">
-                            <label class="field-label">OpenAI Key</label>
-                            <input type="password" id="openaiKeyInput" class="field-input" placeholder="sk-...">
-                        </div>
-                        <div class="field-row" id="openaiModelRow">
-                            <label class="field-label">OpenAI Model</label>
-                            <select id="openaiModelSelect" class="field-input" title="Select OpenAI Model">
-                                <option value="gpt-4o">GPT-4o</option>
-                                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                                <option value="custom">Custom...</option>
-                            </select>
-                        </div>
-                        <div class="field-row hidden" id="openaiCustomRow">
-                            <label class="field-label">Custom Model</label>
-                            <input type="text" id="openaiCustomInput" class="field-input"
-                                placeholder="Enter model name">
-                        </div>
-
-                        <div class="field-row hidden" id="geminiKeyRow">
-                            <label class="field-label">Gemini Key</label>
-                            <input type="password" id="geminiKeyInput" class="field-input" placeholder="AIzaSy...">
-                        </div>
-                        <div class="field-row hidden" id="geminiModelRow">
-                            <label class="field-label">Gemini Model</label>
-                            <select id="geminiModelSelect" class="field-input" title="Select Gemini Model">
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                <option value="custom">Custom...</option>
-                            </select>
-                        </div>
-                        <div class="field-row hidden" id="geminiCustomRow">
-                            <label class="field-label">Custom Model</label>
-                            <input type="text" id="geminiCustomInput" class="field-input"
-                                placeholder="Enter model name">
-                        </div>
-
-                        <div class="field-row hidden" id="claudeKeyRow">
-                            <label class="field-label">Claude Key</label>
-                            <input type="password" id="claudeKeyInput" class="field-input" placeholder="sk-ant-...">
-                        </div>
-                        <div class="field-row hidden" id="claudeModelRow">
-                            <label class="field-label">Claude Model</label>
-                            <select id="claudeModelSelect" class="field-input" title="Select Claude Model">
-                                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                                <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
-                                <option value="custom">Custom...</option>
-                            </select>
-                        </div>
-                        <div class="field-row hidden" id="claudeCustomRow">
-                            <label class="field-label">Custom Model</label>
-                            <input type="text" id="claudeCustomInput" class="field-input"
-                                placeholder="Enter model name">
-                        </div>
-                        <button id="saveSettingsBtn" class="btn-primary">Save Settings</button>
-                    </div>
-                </section>
+      <main>
+        <div id="tab-publisher" class="tab-content active">
+          <section class="card resume-card hidden" id="resumeCard">
+            <div class="card-header">
+              <h3>Pending Automation</h3>
             </div>
-        </main>
+            <div class="card-content">
+              <p id="resumeText">You have unfinished charts in the queue.</p>
+              <button id="resumeBtn" class="btn-primary btn-full">
+                Resume Automation
+              </button>
+              <button
+                id="discardQueueBtn"
+                class="btn-text btn-full-width-spaced"
+              >
+                Discard Queue
+              </button>
+            </div>
+          </section>
 
-        <footer>
-            <div class="brand-line">Created with ❤️ by <strong><a href="https://www.linkedin.com/in/famesh-thakre-6a2825118" target="_blank" rel="noopener">TransFamesh</a></strong>.</div>
-        </footer>
+          <!-- Module Picker (multi-select, up to 5) -->
+          <section class="card" id="modulePickerCard">
+            <div
+              class="card-header"
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <h3>Select Modules</h3>
+              <div class="flex-center-gap">
+                <label
+                  class="toggle-container"
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                  "
+                  title="Toggle module limits"
+                >
+                  <span class="toggle-text" style="color: var(--text-secondary)"
+                    >Limit</span
+                  >
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="overrideLimitToggle" />
+                    <div class="toggle-slider"></div>
+                  </div>
+                  <span class="toggle-text" style="color: var(--text-secondary)"
+                    >No Limit</span
+                  >
+                </label>
+                <span class="chart-count-badge" id="moduleCountBadge"
+                  >0 / 5 selected</span
+                >
+              </div>
+            </div>
+            <div class="card-content">
+              <p class="note-text-center" style="margin-bottom: 8px">
+                Choose up to 5 module types for your A+ Content layout.
+              </p>
+              <div id="modulePickerGrid" class="module-picker-grid">
+                <!-- Populated dynamically by JS from modules.js registry -->
+              </div>
+            </div>
+          </section>
+
+          <section class="card dropzone-card" id="dropzone">
+            <div class="dropzone-content">
+              <div class="icon icon-pulse">📁</div>
+              <h3>Drop Excel File</h3>
+              <p>Drag & drop your .xlsx here</p>
+              <input type="file" id="fileInput" accept=".xlsx, .xls" hidden />
+            </div>
+            <div class="card-footer">
+              <button id="downloadTemplate" class="btn-secondary btn-full">
+                Download Template (.xlsx)
+              </button>
+            </div>
+          </section>
+
+          <!-- Robust Data Preview (accordion per chart) -->
+          <section class="hidden" id="dataPreview">
+            <div class="preview-toolbar">
+              <h3>Data Preview</h3>
+              <div class="flex-center-gap">
+                <span class="chart-count-badge" id="chartCountBadge"
+                  >0 charts</span
+                >
+                <button
+                  class="btn-text d-none"
+                  id="downloadAllChartsBtn"
+                  title="Download all charts as a single Excel file with one tab per chart"
+                >
+                  📦 Download All (.xlsx)
+                </button>
+                <button class="btn-text" id="toggleAllCharts">
+                  ☑ Select All
+                </button>
+                <button class="btn-text" id="clearData">✕ Clear</button>
+              </div>
+            </div>
+            <div class="sandbox-toggle-bar">
+              <span class="sandbox-toggle-title">💡 Live Amazon Sandbox</span>
+              <div class="sandbox-btn-group">
+                <button
+                  id="btnSandboxDesktop"
+                  class="btn-sm active"
+                  title="Switch to emulated Amazon desktop grid view"
+                >
+                  🖥 Desktop View
+                </button>
+                <button
+                  id="btnSandboxMobile"
+                  class="btn-sm"
+                  title="Switch to emulated Amazon mobile card swipe view"
+                >
+                  📱 Mobile View
+                </button>
+              </div>
+            </div>
+            <div class="preview-container" id="previewContainer">
+              <!-- Accordion chart cards rendered here by JS -->
+            </div>
+          </section>
+
+          <section class="card validation-card hidden" id="validationCard">
+            <div class="card-header">
+              <h3>⚠ Validation Issues</h3>
+            </div>
+            <ul class="validation-list" id="validationList"></ul>
+          </section>
+
+          <section class="card results-card hidden" id="resultsCard">
+            <div class="card-header">
+              <h3>🎉 Processing Complete</h3>
+            </div>
+            <div class="card-content">
+              <div id="resultsList" class="results-list-container"></div>
+              <div class="btn-group">
+                <button id="bulkOpenBtn" class="btn-primary">
+                  Bulk Open Previews
+                </button>
+                <button id="downloadCsvBtn" class="btn-secondary">
+                  Download CSV
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="portalNavCard">
+            <div class="card-header">
+              <h3>🌐 A+ Content Manager</h3>
+            </div>
+            <div class="card-content">
+              <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                <select id="portalSelect" class="styled-select" style="flex: 1">
+                  <option value="vendor">Vendor Central</option>
+                  <option value="seller">Seller Central</option>
+                </select>
+                <select id="domainSelect" class="styled-select" style="flex: 1">
+                  <option value="com">Amazon.com</option>
+                  <option value="com.au">Amazon.com.au</option>
+                  <option value="co.uk">Amazon.co.uk</option>
+                </select>
+              </div>
+              <button id="openPortalBtn" class="btn-secondary btn-full">
+                Open A+ Manager
+              </button>
+            </div>
+          </section>
+
+          <section class="action-panel">
+            <div class="btn-group">
+              <button id="startBtn" class="btn-primary" disabled>
+                Start Automation
+              </button>
+              <button id="stopBtn" class="btn-primary hidden">
+                Stop Automation
+              </button>
+            </div>
+            <div id="statusContainer" class="status-container hidden">
+              <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+              <p id="statusText">Ready to start...</p>
+              <div id="logContainer" class="log-container">
+                <ul id="logList" class="log-list"></ul>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- End tab-publisher -->
+
+        <div id="tab-generator" class="tab-content">
+          <section class="card" id="aiGeneratorCard">
+            <div class="card-header">
+              <h3>AI Content Generator</h3>
+            </div>
+            <div class="card-content card-content-gap">
+              <div class="field-row">
+                <label class="field-label">Target Module</label>
+                <select
+                  id="aiModuleTypeSelect"
+                  class="field-input"
+                  title="Select Module Type for AI Generation"
+                >
+                  <!-- Populated dynamically by JS from modules.js registry (AI-ready only) -->
+                </select>
+              </div>
+              <p class="note-text-center">
+                Note: Only the first 50 rows will be analyzed for opportunities.
+              </p>
+
+              <!-- Token Metrics Display -->
+              <div
+                class="ai-token-metrics"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  background: rgba(0, 0, 0, 0.2);
+                  padding: 8px 12px;
+                  border-radius: 6px;
+                  border: 1px solid rgba(255, 255, 255, 0.05);
+                  margin-top: 8px;
+                  font-size: 0.75rem;
+                "
+              >
+                <div style="display: flex; flex-direction: column; gap: 2px">
+                  <span
+                    style="
+                      color: var(--text-dim);
+                      text-transform: uppercase;
+                      font-size: 0.65rem;
+                      letter-spacing: 0.5px;
+                    "
+                    >Last Job</span
+                  >
+                  <span style="font-weight: 600"
+                    ><span
+                      style="color: var(--primary-light)"
+                      id="tokenLastInput"
+                      >0</span
+                    >
+                    In /
+                    <span
+                      style="color: var(--success-color)"
+                      id="tokenLastOutput"
+                      >0</span
+                    >
+                    Out</span
+                  >
+                </div>
+                <div
+                  style="width: 1px; background: rgba(255, 255, 255, 0.1)"
+                ></div>
+                <div
+                  style="
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    text-align: right;
+                  "
+                >
+                  <span
+                    style="
+                      color: var(--text-dim);
+                      text-transform: uppercase;
+                      font-size: 0.65rem;
+                      letter-spacing: 0.5px;
+                    "
+                    >Overall</span
+                  >
+                  <span style="font-weight: 600"
+                    ><span
+                      style="color: var(--primary-light)"
+                      id="tokenOverallInput"
+                      >0</span
+                    >
+                    In /
+                    <span
+                      style="color: var(--success-color)"
+                      id="tokenOverallOutput"
+                      >0</span
+                    >
+                    Out</span
+                  >
+                </div>
+              </div>
+
+              <!-- Error Display Area -->
+              <div id="aiErrorDiv" class="hidden ai-error-banner">
+                <span class="large-emoji">⚠️</span>
+                <span id="aiErrorText"></span>
+              </div>
+
+              <div class="dropzone-card" id="aiDropzone">
+                <div class="dropzone-content">
+                  <div class="icon icon-pulse">📊</div>
+                  <h3>Drop Product Data Excel</h3>
+                  <p>Select file to map columns</p>
+                  <input
+                    type="file"
+                    id="aiFileInput"
+                    accept=".xlsx, .xls"
+                    hidden
+                  />
+                </div>
+              </div>
+              <div id="aiMappingUI" class="hidden">
+                <div class="field-row">
+                  <label class="field-label">Sheet</label>
+                  <select
+                    id="aiSheetSelect"
+                    class="field-input"
+                    title="Select Sheet"
+                  ></select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">Header Row</label>
+                  <input
+                    type="number"
+                    id="aiHeaderRow"
+                    class="field-input"
+                    value="1"
+                    min="1"
+                    title="Header Row"
+                  />
+                </div>
+                <div class="field-row">
+                  <label class="field-label">AI CRO Strategy</label>
+                  <select
+                    id="aiStrategySelect"
+                    class="field-input"
+                    title="Select AI CRO Strategy"
+                  >
+                    <option value="balanced">Balanced CRO (Standard)</option>
+                    <option value="premium">
+                      Premium Justification (Quality & Materials)
+                    </option>
+                    <option value="technical">
+                      Technical Focus (Detailed Specs)
+                    </option>
+                    <option value="usability">
+                      Usability & Lifestyle (Comfort & Daily Use)
+                    </option>
+                  </select>
+                </div>
+                <div id="aiStrategyInfoCard" class="strategy-info-card">
+                  <!-- Populated dynamically by JS -->
+                </div>
+                <div class="section-header-row mt-05">
+                  <span class="section-label">Map Columns</span>
+                  <button
+                    id="aiAutoMapBtn"
+                    class="btn-auto-map"
+                    type="button"
+                    title="One-click intelligent column mapping based on keywords and data pattern checks"
+                  >
+                    ⚡ Smart Auto-Map
+                  </button>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>ASIN <span class="required-dot">*</span></span>
+                    <span class="label-sub">Product code</span>
+                  </label>
+                  <select
+                    id="mapAsin"
+                    class="field-input"
+                    title="Map ASIN Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>Category <span class="required-dot">*</span></span>
+                    <span class="label-sub">Product niche</span>
+                  </label>
+                  <select
+                    id="mapCategory"
+                    class="field-input"
+                    title="Map Category Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>Title <span class="required-dot">*</span></span>
+                    <span class="label-sub">Product name</span>
+                  </label>
+                  <select
+                    id="mapTitle"
+                    class="field-input"
+                    title="Map Title Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>Bullets <span class="required-dot">*</span></span>
+                    <span class="label-sub">Key features</span>
+                  </label>
+                  <select
+                    id="mapBullets"
+                    class="field-input"
+                    title="Map Bullets Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>Description <span class="required-dot">*</span></span>
+                    <span class="label-sub">Detailed copy</span>
+                  </label>
+                  <select
+                    id="mapDesc"
+                    class="field-input"
+                    title="Map Description Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">
+                    <span>Specs</span>
+                    <span class="label-sub">Technical details</span>
+                  </label>
+                  <select
+                    id="mapSpecs"
+                    class="field-input"
+                    title="Map Specs Column"
+                  >
+                    <option value="">--Select--</option>
+                  </select>
+                </div>
+                <button id="generateChartBtn" class="btn-primary mt-1">
+                  Analyze Opportunities
+                </button>
+                <div
+                  id="aiMappingValidationHelper"
+                  class="validation-helper-text"
+                >
+                  <span
+                    >⚠️ Map ASIN, Category, Title, Bullets, & Description to
+                    proceed</span
+                  >
+                </div>
+                <div
+                  id="aiProgressContainer"
+                  class="ai-progress-container hidden"
+                >
+                  <div class="step-text" id="aiProgressText">
+                    Analyzing product data...
+                  </div>
+                  <div class="progress-bar" style="margin-top: 8px">
+                    <div
+                      class="progress-fill"
+                      id="aiProgressFill"
+                      style="width: 0%"
+                    ></div>
+                  </div>
+                </div>
+                <div class="flex-center-gap mt-05">
+                  <button
+                    id="importOppBtn"
+                    class="btn-secondary btn-full"
+                    type="button"
+                  >
+                    📥 Import Saved Groups (.json)
+                  </button>
+                  <input type="file" id="importOppFile" accept=".json" hidden />
+                </div>
+                <button id="aiChangeFileBtn" class="btn-text btn-full mt-05">
+                  ✕ Change File
+                </button>
+              </div>
+
+              <!-- Opportunities UI -->
+              <div
+                id="aiOpportunitiesUI"
+                class="hidden ai-opportunities-container"
+              >
+                <div
+                  class="callout callout-accent ai-callout-banner"
+                  id="aiOppCallout"
+                >
+                  <span class="callout-icon large-emoji">💡</span>
+                  <span id="aiOppText" class="font-semibold"
+                    >Found opportunities!</span
+                  >
+                </div>
+                <div class="flex-center-gap mb-1">
+                  <button
+                    id="aiToggleSelectAllBtn"
+                    class="btn-text"
+                    type="button"
+                  >
+                    ☑ Select All
+                  </button>
+                  <div class="flex-spacer"></div>
+                  <button id="exportOppBtn" class="btn-secondary" type="button">
+                    📤 Export Groups JSON
+                  </button>
+                </div>
+                <div id="aiOppList" class="ai-opp-list">
+                  <!-- Opportunities will be rendered here -->
+                </div>
+                <button id="proceedGenerateBtn" class="btn-primary mt-15">
+                  Proceed to Generate Charts
+                </button>
+                <button id="aiClearOppBtn" class="btn-text btn-full mt-05">
+                  ✕ Clear & Reset
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- End tab-generator -->
+
+        <!-- ═══ HISTORY TAB ═══════════════════════════════════════════ -->
+        <div id="tab-history" class="tab-content">
+          <div class="history-toolbar">
+            <h3 class="preview-toolbar-title">Session History</h3>
+            <div class="history-filter-bar">
+              <button class="history-filter-btn active" data-filter="all">
+                All
+              </button>
+              <button class="history-filter-btn" data-filter="ai_generation">
+                🧠 AI
+              </button>
+              <button class="history-filter-btn" data-filter="run">
+                ▶ Runs
+              </button>
+              <button class="history-filter-btn" data-filter="import">
+                📂 Imports
+              </button>
+            </div>
+            <button class="btn-text btn-clear-history" id="clearAllHistoryBtn">
+              🗑 Clear All
+            </button>
+          </div>
+          <div id="historyList" class="history-list">
+            <!-- Populated by renderHistory() in sidepanel.js -->
+            <div class="history-empty" id="historyEmpty">
+              <div class="history-empty-icon icon-pulse">📄</div>
+              <p>No history yet.</p>
+              <p class="history-empty-sub">
+                AI generations, automation runs, and imports will appear here.
+              </p>
+            </div>
+          </div>
+        </div>
+        <!-- End tab-history -->
+
+        <div id="tab-settings" class="tab-content">
+          <section class="card" id="settingsCard">
+            <div class="card-header">
+              <h3>AI Configuration</h3>
+            </div>
+            <div class="card-content card-content-gap">
+              <div class="field-row">
+                <label class="field-label">AI Platform</label>
+                <select
+                  id="aiPlatformSelect"
+                  class="field-input"
+                  title="Select AI Platform"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="claude">Anthropic Claude</option>
+                </select>
+              </div>
+              <div class="field-row" id="openaiKeyRow">
+                <label class="field-label">OpenAI Key</label>
+                <input
+                  type="password"
+                  id="openaiKeyInput"
+                  class="field-input"
+                  placeholder="sk-..."
+                />
+              </div>
+              <div class="field-row" id="openaiModelRow">
+                <label class="field-label">OpenAI Model</label>
+                <select
+                  id="openaiModelSelect"
+                  class="field-input"
+                  title="Select OpenAI Model"
+                >
+                  <optgroup label="Modern Models">
+                    <option value="gpt-5.5">GPT-5.5</option>
+                    <option value="gpt-5.5-instant">GPT-5.5 Instant</option>
+                    <option value="gpt-5.4">GPT-5.4</option>
+                  </optgroup>
+                  <optgroup label="Budget & Legacy Models">
+                    <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+                    <option value="gpt-5.4-nano">GPT-5.4 Nano</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  </optgroup>
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <div class="field-row hidden" id="openaiCustomRow">
+                <label class="field-label">Custom Model</label>
+                <input
+                  type="text"
+                  id="openaiCustomInput"
+                  class="field-input"
+                  placeholder="Enter model name"
+                />
+              </div>
+
+              <div class="field-row hidden" id="geminiKeyRow">
+                <label class="field-label">Gemini Key</label>
+                <input
+                  type="password"
+                  id="geminiKeyInput"
+                  class="field-input"
+                  placeholder="AIzaSy..."
+                />
+              </div>
+              <div class="field-row hidden" id="geminiModelRow">
+                <label class="field-label">Gemini Model</label>
+                <select
+                  id="geminiModelSelect"
+                  class="field-input"
+                  title="Select Gemini Model"
+                >
+                  <optgroup label="Modern Models">
+                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                    <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  </optgroup>
+                  <optgroup label="Budget & Legacy Models">
+                    <option value="gemini-3.1-flash-lite">
+                      Gemini 3.1 Flash-Lite
+                    </option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                  </optgroup>
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <div class="field-row hidden" id="geminiCustomRow">
+                <label class="field-label">Custom Model</label>
+                <input
+                  type="text"
+                  id="geminiCustomInput"
+                  class="field-input"
+                  placeholder="Enter model name"
+                />
+              </div>
+
+              <div class="field-row hidden" id="claudeKeyRow">
+                <label class="field-label">Claude Key</label>
+                <input
+                  type="password"
+                  id="claudeKeyInput"
+                  class="field-input"
+                  placeholder="sk-ant-..."
+                />
+              </div>
+              <div class="field-row hidden" id="claudeModelRow">
+                <label class="field-label">Claude Model</label>
+                <select
+                  id="claudeModelSelect"
+                  class="field-input"
+                  title="Select Claude Model"
+                >
+                  <optgroup label="Modern Models">
+                    <option value="claude-4-7-opus-latest">
+                      Claude Opus 4.7
+                    </option>
+                    <option value="claude-4-6-sonnet-latest">
+                      Claude Sonnet 4.6
+                    </option>
+                  </optgroup>
+                  <optgroup label="Budget & Legacy Models">
+                    <option value="claude-4-5-haiku-latest">
+                      Claude Haiku 4.5
+                    </option>
+                    <option value="claude-3-5-sonnet-20241022">
+                      Claude 3.5 Sonnet
+                    </option>
+                    <option value="claude-3-5-haiku-20241022">
+                      Claude 3.5 Haiku
+                    </option>
+                    <option value="claude-3-haiku-20240307">
+                      Claude 3 Haiku
+                    </option>
+                  </optgroup>
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <div class="field-row hidden" id="claudeCustomRow">
+                <label class="field-label">Custom Model</label>
+                <input
+                  type="text"
+                  id="claudeCustomInput"
+                  class="field-input"
+                  placeholder="Enter model name"
+                />
+              </div>
+
+              <!-- Advanced Tuning Parameters -->
+              <div
+                style="
+                  height: 1px;
+                  background: rgba(255, 255, 255, 0.05);
+                  margin: 0.5rem 0;
+                "
+              ></div>
+              <h4
+                style="
+                  margin: 0.5rem 0;
+                  font-size: 0.8rem;
+                  color: var(--text-dim);
+                  text-transform: uppercase;
+                  letter-spacing: 0.5px;
+                "
+              >
+                Generation Config
+              </h4>
+
+              <div class="field-row">
+                <label class="field-label" title="Maximum tokens to generate"
+                  >Max Tokens</label
+                >
+                <input
+                  type="number"
+                  id="aiMaxTokens"
+                  class="field-input"
+                  placeholder="4096"
+                  min="1"
+                />
+              </div>
+              <div class="field-row">
+                <label
+                  class="field-label"
+                  title="Creativity vs Determinism (0 to 2)"
+                  >Temperature</label
+                >
+                <input
+                  type="number"
+                  id="aiTemperature"
+                  class="field-input"
+                  placeholder="0.1"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                />
+              </div>
+              <div class="field-row">
+                <label
+                  class="field-label"
+                  title="Nucleus sampling probability (0 to 1)"
+                  >Top-P</label
+                >
+                <input
+                  type="number"
+                  id="aiTopP"
+                  class="field-input"
+                  placeholder="1.0"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                />
+              </div>
+              <div class="field-row">
+                <label
+                  class="field-label"
+                  title="Top-K sampling (Gemini & Claude only)"
+                  >Top-K</label
+                >
+                <input
+                  type="number"
+                  id="aiTopK"
+                  class="field-input"
+                  placeholder="40"
+                  min="1"
+                />
+              </div>
+
+              <button
+                id="saveSettingsBtn"
+                class="btn-primary"
+                style="margin-top: 0.5rem"
+              >
+                Save Settings
+              </button>
+            </div>
+          </section>
+
+          <section class="card" style="margin-top: 1.5rem">
+            <div class="card-header">
+              <h3>Love A-Plus Publisher?</h3>
+            </div>
+            <div
+              class="card-content"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+                margin-top: 0.75rem;
+              "
+            >
+              <p
+                class="note-text-center"
+                style="
+                  font-size: 0.8rem;
+                  color: var(--text-dim);
+                  text-align: center;
+                "
+              >
+                Help us grow and improve! Share your experience by leaving a
+                review on the Chrome Web Store.
+              </p>
+              <a
+                href="https://chromewebstore.google.com/detail/a-plus-publisher-comparis/ihdbhpbhmbhmgckmdcahijcmdpchnmed"
+                target="_blank"
+                rel="noopener"
+                class="btn-secondary btn-full"
+                style="
+                  text-decoration: none;
+                  text-align: center;
+                  display: block;
+                  padding: 0.6rem;
+                "
+              >
+                ⭐⭐⭐⭐⭐ Rate on Web Store
+              </a>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer>
+        <div class="brand-line">
+          Created with ❤️ by
+          <strong
+            ><a
+              href="https://www.linkedin.com/in/famesh-thakre-6a2825118"
+              target="_blank"
+              rel="noopener"
+              >TransFamesh</a
+            ></strong
+          >.
+        </div>
+      </footer>
     </div>
     <script type="module" src="sidepanel.js"></script>
-</body>
-
+  </body>
 </html>

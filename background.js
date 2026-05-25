@@ -42,16 +42,27 @@ class JobManager {
         this.queue = [];
         this.currentTabId = null;
         this.isExecuting = false;
+        this.portal = "vendor";
+        this.domain = "com";
     }
 
-    async start(charts = null, resume = false) {
+    async start(charts = null, resume = false, portal = null, domain = null) {
         this.isExecuting = true;
         if (resume) {
-            const result = await chrome.storage.local.get(['pendingQueue']);
+            const result = await chrome.storage.local.get(['pendingQueue', 'automationPortal', 'automationDomain']);
             this.queue = result.pendingQueue || [];
+            this.portal = result.automationPortal || "vendor";
+            this.domain = result.automationDomain || "com";
         } else if (charts) {
             this.queue = charts;
-            await chrome.storage.local.set({ pendingQueue: this.queue, processedCharts: [] });
+            this.portal = portal || "vendor";
+            this.domain = domain || "com";
+            await chrome.storage.local.set({ 
+                pendingQueue: this.queue, 
+                processedCharts: [],
+                automationPortal: this.portal,
+                automationDomain: this.domain
+            });
         }
 
         if (this.queue.length > 0) {
@@ -112,7 +123,17 @@ class JobManager {
             progress: 10
         });
 
-        const targetUrl = nextChart.draftUrl || "https://vendorcentral.amazon.com/hz/vendor/members/aplus/content-manager";
+        // Use selected portal and domain if draft URL is blank
+        let targetUrl = nextChart.draftUrl;
+        if (!targetUrl) {
+            const domainVal = this.domain || "com";
+            const portalVal = this.portal || "vendor";
+            if (portalVal === "seller") {
+                targetUrl = `https://sellercentral.amazon.${domainVal}/enhanced-content/content-manager`;
+            } else {
+                targetUrl = `https://vendorcentral.amazon.${domainVal}/hz/vendor/members/aplus/content-manager`;
+            }
+        }
 
         safeSendMessage({
             type: "AUTOMATION_STATUS",
@@ -208,7 +229,12 @@ const jobManager = new JobManager();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "START_AUTOMATION") {
-        jobManager.start(message.data ? message.data.charts : null, message.data ? message.data.resume : false);
+        jobManager.start(
+            message.data ? message.data.charts : null, 
+            message.data ? message.data.resume : false,
+            message.data ? message.data.portal : null,
+            message.data ? message.data.domain : null
+        );
     }
 
     if (message.type === "CHART_COMPLETED") {
