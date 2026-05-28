@@ -67,7 +67,7 @@ Your task is to generate elite, high-converting A+ Content for a specific Amazon
 
 For modules with repeated blocks (e.g., "3 images & text"), generate UNIQUE content for EACH block — do NOT repeat the same text across blocks. Each block should highlight a different product benefit or feature.
 
-Analyze the product data deeply and generate compelling, conversion-optimized content.`
+Analyze the product data deeply and generate compelling, conversion-optimized content.`,
 };
 
 export const STRATEGY_BLOCKS = {
@@ -106,5 +106,5 @@ export const STRATEGY_BLOCKS = {
 - Focus on practical, daily experience metrics that matter to home users, families, travelers, or busy professionals.
 - Prioritize metrics such as ease of cleaning/maintenance, storage portability, ergonomic handles, silent operation, and child/pet safety details.
 - Express values in terms of direct lifestyle benefits (e.g., "Dishwasher-Safe", "Folds Flat", "Whisper-Quiet 20dB").
-- Avoid deep technical specs; translate them into human terms (e.g., "All-Day Battery" instead of "4000mAh").`
+- Avoid deep technical specs; translate them into human terms (e.g., "All-Day Battery" instead of "4000mAh").`,
 };

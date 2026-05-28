@@ -51,6 +51,51 @@
 
       <main>
         <div id="tab-publisher" class="tab-content active">
+          <div class="step-container" id="step1-portal">
+            <div class="step-header">1. Setup Your Portal and Domain</div>
+            <section
+              class="card"
+              id="portalNavCard"
+              style="
+                background: rgba(99, 102, 241, 0.05);
+                border-color: rgba(99, 102, 241, 0.2);
+              "
+            >
+              <div class="card-content">
+                <div style="display: flex; gap: 8px">
+                  <select
+                    id="portalSelect"
+                    class="styled-select"
+                    style="flex: 1; padding: 0.5rem; font-size: 0.75rem"
+                  >
+                    <option value="vendor">Vendor Central</option>
+                    <option value="seller">Seller Central</option>
+                  </select>
+                  <select
+                    id="domainSelect"
+                    class="styled-select"
+                    style="flex: 1; padding: 0.5rem; font-size: 0.75rem"
+                  >
+                    <option value="com">Amazon.com</option>
+                    <option value="com.au">Amazon.com.au</option>
+                    <option value="co.uk">Amazon.co.uk</option>
+                  </select>
+                  <button
+                    id="openPortalBtn"
+                    class="btn-secondary"
+                    style="
+                      padding: 0.5rem 0.8rem;
+                      font-size: 0.75rem;
+                      white-space: nowrap;
+                    "
+                  >
+                    Open Portal
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <section class="card resume-card hidden" id="resumeCard">
             <div class="card-header">
               <h3>Pending Automation</h3>
@@ -69,114 +114,179 @@
             </div>
           </section>
 
-          <!-- Module Picker (multi-select, up to 5) -->
-          <section class="card" id="modulePickerCard">
-            <div
-              class="card-header"
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
-            >
-              <h3>Select Modules</h3>
-              <div class="flex-center-gap">
-                <label
-                  class="toggle-container"
+          <div class="step-container" id="step1-setup">
+            <div class="step-header">2. Layout Setup</div>
+            <!-- Module Picker (multi-select, up to 5) -->
+            <section class="card" id="modulePickerCard">
+              <div
+                class="card-header"
+                id="modulePickerHeader"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  cursor: pointer;
+                "
+              >
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span
+                    id="modulePickerChevron"
+                    style="font-size: 10px; transition: transform 0.2s"
+                    >▼</span
+                  >
+                  <h3 style="margin: 0">Select Modules</h3>
+                </div>
+                <div class="flex-center-gap" id="modulePickerHeaderControls">
+                  <label
+                    class="toggle-container"
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      cursor: pointer;
+                    "
+                    title="Toggle module limits"
+                  >
+                    <span
+                      class="toggle-text"
+                      style="color: var(--text-secondary)"
+                      >Limit</span
+                    >
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="overrideLimitToggle" />
+                      <div class="toggle-slider"></div>
+                    </div>
+                    <span
+                      class="toggle-text"
+                      style="color: var(--text-secondary)"
+                      >No Limit</span
+                    >
+                  </label>
+                  <span class="chart-count-badge" id="moduleCountBadge"
+                    >0 / 5 selected</span
+                  >
+                </div>
+              </div>
+              <div class="card-content" id="modulePickerContent">
+                <div
+                  class="flex-center-gap"
                   style="
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    cursor: pointer;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    width: 100%;
                   "
-                  title="Toggle module limits"
                 >
-                  <span class="toggle-text" style="color: var(--text-secondary)"
-                    >Limit</span
+                  <p
+                    class="note-text-center"
+                    id="modulePickerInstruction"
+                    style="margin-bottom: 0; text-align: left"
                   >
-                  <div class="toggle-switch">
-                    <input type="checkbox" id="overrideLimitToggle" />
-                    <div class="toggle-slider"></div>
+                    Choose up to 5 module types for your A+ Content layout.
+                  </p>
+                  <button
+                    class="btn-text"
+                    id="toggleAllModulesBtn"
+                    type="button"
+                    style="white-space: nowrap"
+                  >
+                    ☑ Select All
+                  </button>
+                </div>
+                <div id="modulePickerGrid" class="module-picker-grid">
+                  <!-- Populated dynamically by JS from modules.js registry -->
+                </div>
+
+                <div class="selected-modules-section">
+                  <div class="section-label mt-1 mb-05">
+                    Selected Layout (Drag to reorder)
                   </div>
-                  <span class="toggle-text" style="color: var(--text-secondary)"
-                    >No Limit</span
+                  <div id="selectedModulesTray" class="modules-tray">
+                    <div class="modules-tray-empty">No modules selected</div>
+                  </div>
+                  <div
+                    class="mt-1"
+                    id="downloadTemplateContainer"
+                    style="display: none"
                   >
-                </label>
-                <span class="chart-count-badge" id="moduleCountBadge"
-                  >0 / 5 selected</span
-                >
+                    <button
+                      id="downloadTemplate"
+                      class="btn-secondary btn-full"
+                    >
+                      Download Template (.xlsx)
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="card-content">
-              <p class="note-text-center" style="margin-bottom: 8px">
-                Choose up to 5 module types for your A+ Content layout.
-              </p>
-              <div id="modulePickerGrid" class="module-picker-grid">
-                <!-- Populated dynamically by JS from modules.js registry -->
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <section class="card dropzone-card" id="dropzone">
-            <div class="dropzone-content">
-              <div class="icon icon-pulse">📁</div>
-              <h3>Drop Excel File</h3>
-              <p>Drag & drop your .xlsx here</p>
-              <input type="file" id="fileInput" accept=".xlsx, .xls" hidden />
-            </div>
-            <div class="card-footer">
-              <button id="downloadTemplate" class="btn-secondary btn-full">
-                Download Template (.xlsx)
-              </button>
-            </div>
-          </section>
-
-          <!-- Robust Data Preview (accordion per chart) -->
-          <section class="hidden" id="dataPreview">
-            <div class="preview-toolbar">
-              <h3>Data Preview</h3>
-              <div class="flex-center-gap">
-                <span class="chart-count-badge" id="chartCountBadge"
-                  >0 charts</span
-                >
-                <button
-                  class="btn-text d-none"
-                  id="downloadAllChartsBtn"
-                  title="Download all charts as a single Excel file with one tab per chart"
-                >
-                  📦 Download All (.xlsx)
-                </button>
-                <button class="btn-text" id="toggleAllCharts">
-                  ☑ Select All
-                </button>
-                <button class="btn-text" id="clearData">✕ Clear</button>
+          <div class="step-container" id="step2-data">
+            <div class="step-header">3. Data Import</div>
+            <section class="card dropzone-card" id="dropzone">
+              <div class="dropzone-content">
+                <div class="icon icon-pulse">📁</div>
+                <h3>Drop Excel File</h3>
+                <p>Drag & drop your .xlsx here</p>
+                <input type="file" id="fileInput" accept=".xlsx, .xls" hidden />
               </div>
-            </div>
-            <div class="sandbox-toggle-bar">
-              <span class="sandbox-toggle-title">💡 Live Amazon Sandbox</span>
-              <div class="sandbox-btn-group">
-                <button
-                  id="btnSandboxDesktop"
-                  class="btn-sm active"
-                  title="Switch to emulated Amazon desktop grid view"
-                >
-                  🖥 Desktop View
-                </button>
-                <button
-                  id="btnSandboxMobile"
-                  class="btn-sm"
-                  title="Switch to emulated Amazon mobile card swipe view"
-                >
-                  📱 Mobile View
-                </button>
-              </div>
-            </div>
-            <div class="preview-container" id="previewContainer">
-              <!-- Accordion chart cards rendered here by JS -->
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <section class="card validation-card hidden" id="validationCard">
+          <div class="step-container" id="step3-review">
+            <div class="step-header">4. Review & Execute</div>
+            <!-- Robust Data Preview (accordion per chart) -->
+            <section class="hidden" id="dataPreview">
+              <div class="preview-toolbar">
+                <h3>Data Preview</h3>
+                <div class="flex-center-gap">
+                  <span class="chart-count-badge" id="chartCountBadge"
+                    >0 charts</span
+                  >
+                  <button
+                    class="btn-text d-none"
+                    id="downloadAllChartsBtn"
+                    title="Download all charts as a single Excel file with one tab per chart"
+                  >
+                    📦 Download All (.xlsx)
+                  </button>
+                  <button class="btn-text" id="toggleAllCharts">
+                    ☑ Select All
+                  </button>
+                  <button class="btn-text" id="clearData">✕ Clear</button>
+                </div>
+              </div>
+
+              <div class="sandbox-toggle-bar">
+                <span class="sandbox-toggle-title">💡 Live Amazon Sandbox</span>
+                <div class="sandbox-btn-group">
+                  <button
+                    id="btnSandboxDesktop"
+                    class="btn-sm active"
+                    title="Switch to emulated Amazon desktop grid view"
+                  >
+                    🖥 Desktop View
+                  </button>
+                  <button
+                    id="btnSandboxMobile"
+                    class="btn-sm"
+                    title="Switch to emulated Amazon mobile card swipe view"
+                  >
+                    📱 Mobile View
+                  </button>
+                </div>
+              </div>
+              <div class="preview-container" id="previewContainer">
+                <!-- Accordion chart cards rendered here by JS -->
+              </div>
+            </section>
+          </div>
+
+          <section
+            class="card validation-card hidden"
+            id="validationCard"
+            role="alert"
+            aria-live="assertive"
+          >
             <div class="card-header">
               <h3>⚠ Validation Issues</h3>
             </div>
@@ -200,29 +310,7 @@
             </div>
           </section>
 
-          <section class="card" id="portalNavCard">
-            <div class="card-header">
-              <h3>🌐 A+ Content Manager</h3>
-            </div>
-            <div class="card-content">
-              <div style="display: flex; gap: 8px; margin-bottom: 8px">
-                <select id="portalSelect" class="styled-select" style="flex: 1">
-                  <option value="vendor">Vendor Central</option>
-                  <option value="seller">Seller Central</option>
-                </select>
-                <select id="domainSelect" class="styled-select" style="flex: 1">
-                  <option value="com">Amazon.com</option>
-                  <option value="com.au">Amazon.com.au</option>
-                  <option value="co.uk">Amazon.co.uk</option>
-                </select>
-              </div>
-              <button id="openPortalBtn" class="btn-secondary btn-full">
-                Open A+ Manager
-              </button>
-            </div>
-          </section>
-
-          <section class="action-panel">
+          <section class="action-panel sticky-action-panel">
             <div class="btn-group">
               <button id="startBtn" class="btn-primary" disabled>
                 Start Automation
@@ -232,12 +320,28 @@
               </button>
             </div>
             <div id="statusContainer" class="status-container hidden">
-              <div class="progress-bar">
+              <div
+                class="progress-bar"
+                role="progressbar"
+                aria-label="Automation Progress"
+              >
                 <div class="progress-fill" id="progressFill"></div>
               </div>
-              <p id="statusText">Ready to start...</p>
+              <p id="statusText" aria-live="polite">Ready to start...</p>
               <div id="logContainer" class="log-container">
                 <ul id="logList" class="log-list"></ul>
+              </div>
+              <div
+                class="flex-center-gap"
+                style="justify-content: flex-end; margin-top: 8px; width: 100%"
+              >
+                <button
+                  id="exportLogsBtn"
+                  class="btn btn-secondary btn-text"
+                  style="padding: 4px 8px; font-size: 11px"
+                >
+                  Export Logs
+                </button>
               </div>
             </div>
           </section>
@@ -341,8 +445,13 @@
               </div>
 
               <!-- Error Display Area -->
-              <div id="aiErrorDiv" class="hidden ai-error-banner">
-                <span class="large-emoji">⚠️</span>
+              <div
+                id="aiErrorDiv"
+                class="hidden ai-error-banner"
+                role="alert"
+                aria-live="assertive"
+              >
+                <span class="large-emoji" aria-hidden="true">⚠️</span>
                 <span id="aiErrorText"></span>
               </div>
 
@@ -506,7 +615,7 @@
                   id="aiProgressContainer"
                   class="ai-progress-container hidden"
                 >
-                  <div class="step-text" id="aiProgressText">
+                  <div class="step-text" id="aiProgressText" aria-live="polite">
                     Analyzing product data...
                   </div>
                   <div class="progress-bar" style="margin-top: 8px">

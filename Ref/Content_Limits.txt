@@ -1,0 +1,248 @@
+
+Module: 3p-module-b
+  Label: Headline
+    Limit: 150
+  Label: Image
+  Label: Headline
+    Limit: 150
+  Label: Body text
+    Limit: 6000
+
+Module: launchpad-company-logo
+  Label: Image
+
+Module: module-4
+  Label: Headline
+    Limit: 200
+  Label: * Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+
+Module: module-10
+  Label: * Image
+  Label: * Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+  Label: * Image
+  Label: * Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+  Label: * Image
+  Label: * Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+  Label: * Image
+  Label: * Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+
+Module: module-11
+  Label: Headline
+    Limit: 70
+  Label: Body text
+    Limit: 300
+  Label: * Background image
+
+Module: module-12
+  Label: Headline
+    Limit: 70
+  Label: Body text
+    Limit: 300
+  Label: * Background image
+
+Module: module-6
+  Label: * Image
+  Label: Headline
+    Limit: 160
+  Label: Description
+    Limit: 1000
+  Label: Image Caption
+    Limit: 200
+  Label: Image Caption
+    Limit: 200
+  Label: Image Caption
+    Limit: 200
+  Label: Image Caption
+    Limit: 200
+
+Module: launchpad-brand-description-left
+  Label: Body text
+    Limit: 6000
+
+Module: module-8
+  Label: * Image
+  Label: Headline
+    Limit: 160
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 1000
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 400
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 400
+  Label: Headline
+    Limit: 160
+  Label: Bullet Point Text
+    Limit: 100
+
+Module: module-1
+  Label: * Image
+  Label: Image Caption
+    Limit: 200
+  Label: Headline
+    Limit: 160
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 500
+  Label: Bullet Point Text
+    Limit: 200
+  Label: * Image
+  Label: Headline
+    Limit: 200
+  Label: Body text
+    Limit: 500
+  Label: Bullet Point Text
+    Limit: 200
+
+Module: module-7
+  Label: Headline
+    Limit: 200
+  Label: * Image
+  Label: Headline
+    Limit: 160
+  Label: Subheadline
+    Limit: 200
+  Label: * Body text
+    Limit: 400
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 600
+  Label: Headline
+    Limit: 160
+  Label: Subheadline
+    Limit: 200
+  Label: Bullet Point Text
+    Limit: 100
+  Label: Subheadline
+    Limit: 200
+  Label: Body text
+    Limit: 1000
+
+Module: module-2
+  Label: * Image
+  Label: Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+
+Module: module-3
+  Label: Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 1000
+  Label: * Image
+
+Module: module-16-tech-specs
+  Label: Headline
+    Limit: 80
+  Label: * Specification
+    Limit: 30
+  Label: * Definition
+    Limit: 500
+  Label: * Specification
+    Limit: 30
+  Label: * Definition
+    Limit: 500
+  Label: * Specification
+    Limit: 30
+  Label: * Definition
+    Limit: 500
+  Label: * Specification
+    Limit: 30
+  Label: * Definition
+    Limit: 500
+
+Module: basic-module-13-text
+  Label: Headline
+    Limit: 160
+  Label: * Body text
+    Limit: 5000
+
+Module: module-9
+  Label: Headline
+    Limit: 200
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+  Label: Image
+  Label: Headline
+    Limit: 160
+  Label: Body text
+    Limit: 1000
+
+Module: module-5
+  Label: * ASIN
+    Limit: 10
+  Label: * Image
+  Label: * Title
+    Limit: 80
+  Label: * ASIN
+    Limit: 10
+  Label: * Image
+  Label: * Title
+    Limit: 80
+  Label: ASIN
+    Limit: 10
+  Label: Image
+  Label: Title
+    Limit: 80
+  Label: ASIN
+    Limit: 10
+  Label: Image
+  Label: Title
+    Limit: 80
+  Label: ASIN
+    Limit: 10
+  Label: Image
+  Label: Title
+    Limit: 80
+  Label: ASIN
+    Limit: 10
+  Label: Image
+  Label: Title
+    Limit: 80

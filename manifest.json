@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "A-Plus Publisher: Amazon A+ Content & AI Generator",
-  "version": "1.0.3",
-  "description": "Automate all 17 Amazon A+ Content modules. Bulk upload via Excel, preview desktop/mobile sandbox grids, & generate descriptions with ChatGPT/Gemini.",
+  "version": "1.0.2",
+  "description": "Automate all 17 Amazon A+ Content modules. Bulk upload via Excel, preview sandbox grids, & generate description with AI.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -12,7 +12,8 @@
     "sidePanel",
     "storage",
     "unlimitedStorage",
-    "scripting"
+    "scripting",
+    "webRequest"
   ],
   "host_permissions": [
     "https://*.amazon.com/*",

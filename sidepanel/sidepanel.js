@@ -3,7 +3,13 @@
 import { setupAIGenerator } from "../scripts/ai-generator.js";
 import { HistoryManager } from "../scripts/history.js";
 import { SandboxRenderer } from "../scripts/sandbox-renderer.js";
-import { MODULE_REGISTRY, getAIReadyModules, getTemplateHeaders, getModuleById, MAX_MODULES_PER_DRAFT } from "../scripts/modules.js";
+import {
+  MODULE_REGISTRY,
+  getAIReadyModules,
+  getTemplateHeaders,
+  getModuleById,
+  MAX_MODULES_PER_DRAFT,
+} from "../scripts/modules.js";
 
 // Mock Chrome Extension APIs if running in normal web page for local testing/preview
 if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
@@ -25,7 +31,7 @@ if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
       sendMessage: (message, callback) => {
         if (callback) callback({ status: "ok" });
       },
-      onMessage: { addListener: (listener) => { } },
+      onMessage: { addListener: (listener) => {} },
     },
   };
 }
@@ -38,7 +44,7 @@ function buildPreviewUrl(draftUrl) {
   if (!draftUrl) return "";
   const match = draftUrl.match(/\/content\/([a-f0-9\-]{36})/i);
   if (!match || !match[1]) return "";
-  
+
   try {
     const parsed = new URL(draftUrl);
     return `https://${parsed.host}/aplus/api/GetContentPreview?contentId=${match[1]}&deviceType=DESKTOP`;
@@ -61,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const toggleAllChartsBtn = document.getElementById("toggleAllCharts");
   const startBtn = document.getElementById("startBtn");
   const stopBtn = document.getElementById("stopBtn");
+  const exportLogsBtn = document.getElementById("exportLogsBtn");
   const statusContainer = document.getElementById("statusContainer");
   const progressFill = document.getElementById("progressFill");
   const statusText = document.getElementById("statusText");
@@ -74,16 +81,50 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- Module Picker Collapse Logic ---
+  const modulePickerHeader = document.getElementById("modulePickerHeader");
+  const modulePickerContent = document.getElementById("modulePickerContent");
+  const modulePickerChevron = document.getElementById("modulePickerChevron");
+
+  if (modulePickerHeader && modulePickerContent && modulePickerChevron) {
+    modulePickerHeader.addEventListener("click", () => {
+      const isHidden = modulePickerContent.classList.contains("hidden");
+      if (isHidden) {
+        modulePickerContent.classList.remove("hidden");
+        modulePickerChevron.style.transform = "rotate(0deg)";
+      } else {
+        modulePickerContent.classList.add("hidden");
+        modulePickerChevron.style.transform = "rotate(-90deg)";
+      }
+    });
+  }
+
+  const modulePickerHeaderControls = document.getElementById(
+    "modulePickerHeaderControls",
+  );
+  if (modulePickerHeaderControls) {
+    modulePickerHeaderControls.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+  }
+
   // --- Feedback Button Handler ---
   const feedbackBtn = document.getElementById("btn-feedback");
   if (feedbackBtn) {
     feedbackBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      const manifest = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest)
-        ? chrome.runtime.getManifest()
-        : { name: "A-Plus Publisher Pro", version: "1.0.0" };
+      const manifest =
+        typeof chrome !== "undefined" &&
+        chrome.runtime &&
+        chrome.runtime.getManifest
+          ? chrome.runtime.getManifest()
+          : { name: "A-Plus Publisher Pro", version: "1.0.0" };
       let appName = manifest.name;
-      if (typeof chrome !== "undefined" && chrome.i18n && chrome.i18n.getMessage) {
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.i18n &&
+        chrome.i18n.getMessage
+      ) {
         const i18nName = chrome.i18n.getMessage("appName");
         if (i18nName) appName = i18nName;
       }
@@ -95,7 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
       params.append("usp", "pp_url");
       if (versionFieldId) params.append(versionFieldId, version);
       const finalUrl = `${baseUrl}?${params.toString()}`;
-      
+
       if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
         chrome.tabs.create({ url: finalUrl });
       } else {
@@ -107,9 +148,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Version Badge Logic ---
   const versionBadge = document.getElementById("app-version-badge");
   if (versionBadge) {
-    const manifest = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest)
-      ? chrome.runtime.getManifest()
-      : { version: "1.0.0" };
+    const manifest =
+      typeof chrome !== "undefined" &&
+      chrome.runtime &&
+      chrome.runtime.getManifest
+        ? chrome.runtime.getManifest()
+        : { version: "1.0.0" };
     versionBadge.textContent = `v${manifest.version}`;
   }
 
@@ -153,6 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ─── Module Picker Grid (Publisher tab, multi-select up to 5) ───
   const modulePickerGrid = document.getElementById("modulePickerGrid");
   const moduleCountBadge = document.getElementById("moduleCountBadge");
+  const toggleAllModulesBtn = document.getElementById("toggleAllModulesBtn");
   let selectedModuleIds = [];
   let currentMaxModules = MAX_MODULES_PER_DRAFT;
 
@@ -160,7 +205,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (overrideLimitToggle) {
     overrideLimitToggle.addEventListener("change", (e) => {
       currentMaxModules = e.target.checked ? 99 : MAX_MODULES_PER_DRAFT;
-      
+
+      const instruction = document.getElementById("modulePickerInstruction");
+      if (instruction) {
+        instruction.textContent = e.target.checked
+          ? "Choose module types for your A+ Content layout (No Limit)."
+          : "Choose up to 5 module types for your A+ Content layout.";
+      }
+
       // If turning limit back on, trim selected modules to valid limits
       if (!e.target.checked) {
         let validIds = [];
@@ -168,14 +220,44 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let id of selectedModuleIds) {
           counts[id] = (counts[id] || 0) + 1;
           const mod = getModuleById(id);
-          const modMax = mod ? (mod.maxPerDraft || 5) : 5;
+          const modMax = mod ? mod.maxPerDraft || 5 : 5;
           if (counts[id] <= modMax && validIds.length < MAX_MODULES_PER_DRAFT) {
             validIds.push(id);
           }
         }
         selectedModuleIds = validIds;
       }
-      
+
+      updateModulePickerState();
+    });
+  }
+
+  if (toggleAllModulesBtn) {
+    toggleAllModulesBtn.addEventListener("click", () => {
+      const allSelected = MODULE_REGISTRY.every((mod) =>
+        selectedModuleIds.includes(mod.id),
+      );
+
+      if (allSelected) {
+        // Deselect all
+        selectedModuleIds = [];
+      } else {
+        // Select all: ensure every module has at least 1 count
+        // If not in No Limit mode, automatically turn No Limit on
+        if (currentMaxModules !== 99) {
+          if (overrideLimitToggle) {
+            overrideLimitToggle.checked = true;
+            overrideLimitToggle.dispatchEvent(new Event("change"));
+          }
+        }
+
+        MODULE_REGISTRY.forEach((mod) => {
+          if (!selectedModuleIds.includes(mod.id)) {
+            selectedModuleIds.push(mod.id);
+          }
+        });
+      }
+
       updateModulePickerState();
     });
   }
@@ -190,7 +272,10 @@ document.addEventListener("DOMContentLoaded", () => {
       card.dataset.moduleId = mod.id;
       card.setAttribute("tabindex", "0");
       card.setAttribute("role", "button");
-      card.setAttribute("aria-label", `Toggle selection for module ${mod.name}`);
+      card.setAttribute(
+        "aria-label",
+        `Toggle selection for module ${mod.name}`,
+      );
       if (selectedModuleIds.includes(mod.id)) card.classList.add("selected");
 
       // Check mark
@@ -222,7 +307,9 @@ document.addEventListener("DOMContentLoaded", () => {
       card.appendChild(label);
 
       card.addEventListener("click", () => {
-        const currentCount = selectedModuleIds.filter((id) => id === mod.id).length;
+        const currentCount = selectedModuleIds.filter(
+          (id) => id === mod.id,
+        ).length;
         if (currentCount > 0) {
           // Deselect all instances of this module
           selectedModuleIds = selectedModuleIds.filter((id) => id !== mod.id);
@@ -249,7 +336,16 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateModulePickerState() {
     const count = selectedModuleIds.length;
     if (moduleCountBadge) {
-      moduleCountBadge.textContent = `${count} / ${currentMaxModules === 99 ? '∞' : currentMaxModules} selected`;
+      moduleCountBadge.textContent = `${count} / ${currentMaxModules === 99 ? "∞" : currentMaxModules} selected`;
+    }
+
+    if (toggleAllModulesBtn) {
+      const allSelected = MODULE_REGISTRY.every((mod) =>
+        selectedModuleIds.includes(mod.id),
+      );
+      toggleAllModulesBtn.textContent = allSelected
+        ? "☐ Deselect All"
+        : "☑ Select All";
     }
 
     const cards = modulePickerGrid.querySelectorAll(".module-picker-card");
@@ -259,7 +355,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const currentCount = selectedModuleIds.filter((x) => x === id).length;
       const isSelected = currentCount > 0;
 
-      const modMax = currentMaxModules === 99 ? 99 : (mod ? (mod.maxPerDraft || 5) : 5);
+      const modMax =
+        currentMaxModules === 99 ? 99 : mod ? mod.maxPerDraft || 5 : 5;
       const isModuleMaxReached = currentCount >= modMax;
       const isGlobalMaxReached = count >= currentMaxModules;
       const cannotIncrement = isModuleMaxReached || isGlobalMaxReached;
@@ -268,7 +365,11 @@ document.addEventListener("DOMContentLoaded", () => {
       card.classList.toggle("max-reached", !isSelected && cannotIncrement);
 
       // Handle multi-instance counter controls
-      if (isSelected && mod && (mod.maxPerDraft > 1 || currentMaxModules === 99)) {
+      if (
+        isSelected &&
+        mod &&
+        (mod.maxPerDraft > 1 || currentMaxModules === 99)
+      ) {
         let controls = card.querySelector(".module-controls");
         if (!controls) {
           controls = document.createElement("div");
@@ -298,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
             e.stopPropagation();
             if (selectedModuleIds.length < currentMaxModules) {
               const curr = selectedModuleIds.filter((x) => x === id).length;
-              const mMax = currentMaxModules === 99 ? 99 : (mod.maxPerDraft || 5);
+              const mMax = currentMaxModules === 99 ? 99 : mod.maxPerDraft || 5;
               if (curr < mMax) {
                 selectedModuleIds.push(id);
                 updateModulePickerState();
@@ -322,6 +423,92 @@ document.addEventListener("DOMContentLoaded", () => {
           controls.remove();
         }
       }
+    });
+
+    renderSelectedModulesTray();
+  }
+
+  function renderSelectedModulesTray() {
+    const tray = document.getElementById("selectedModulesTray");
+    const dlContainer = document.getElementById("downloadTemplateContainer");
+
+    if (!tray) return;
+
+    tray.innerHTML = "";
+    if (selectedModuleIds.length === 0) {
+      tray.innerHTML =
+        '<div class="modules-tray-empty">No modules selected</div>';
+      if (dlContainer) dlContainer.style.display = "none";
+      return;
+    }
+
+    if (dlContainer) dlContainer.style.display = "block";
+
+    selectedModuleIds.forEach((id, index) => {
+      const mod = getModuleById(id);
+      if (!mod) return;
+
+      const chip = document.createElement("div");
+      chip.className = "tray-chip";
+      chip.draggable = true;
+      chip.dataset.index = index;
+
+      const thumb = document.createElement("img");
+      thumb.className = "tray-chip-thumb";
+      thumb.src = mod.thumbnail || "../icons/icon128.png";
+      thumb.onerror = () => {
+        thumb.src = "../icons/icon128.png";
+      };
+
+      const name = document.createElement("span");
+      name.textContent = `${index + 1}. ${mod.shortName}`;
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "tray-chip-remove";
+      removeBtn.innerHTML = "×";
+      removeBtn.title = "Remove module";
+      removeBtn.addEventListener("click", () => {
+        selectedModuleIds.splice(index, 1);
+        updateModulePickerState();
+      });
+
+      // Drag and drop events for reordering
+      chip.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        chip.classList.add("dragging");
+        e.dataTransfer.setData("text/plain", index);
+      });
+
+      chip.addEventListener("dragend", () => {
+        chip.classList.remove("dragging");
+        tray
+          .querySelectorAll(".tray-chip")
+          .forEach((c) => (c.style.border = ""));
+      });
+
+      chip.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        chip.style.border = "1px solid var(--primary)";
+      });
+
+      chip.addEventListener("dragleave", () => {
+        chip.style.border = "";
+      });
+
+      chip.addEventListener("drop", (e) => {
+        e.preventDefault();
+        chip.style.border = "";
+        const draggedIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+        if (draggedIndex !== index && !isNaN(draggedIndex)) {
+          const item = selectedModuleIds.splice(draggedIndex, 1)[0];
+          selectedModuleIds.splice(index, 0, item);
+          updateModulePickerState();
+        }
+      });
+
+      chip.append(thumb, name, removeBtn);
+      tray.appendChild(chip);
     });
   }
 
@@ -480,14 +667,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const styles = {
       docTitle: {
         font: { bold: true, sz: 14, color: { rgb: "1F497D" } },
-        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
+        border: {
+          top: { style: "none" },
+          bottom: { style: "none" },
+          left: { style: "none" },
+          right: { style: "none" },
+        },
       },
       docSub: {
         font: { italic: true, sz: 10, color: { rgb: "555555" } },
-        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
+        border: {
+          top: { style: "none" },
+          bottom: { style: "none" },
+          left: { style: "none" },
+          right: { style: "none" },
+        },
       },
       docEmpty: {
-        border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } },
+        border: {
+          top: { style: "none" },
+          bottom: { style: "none" },
+          left: { style: "none" },
+          right: { style: "none" },
+        },
       },
       tblHeader: {
         font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
@@ -520,26 +722,137 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // Determine which modules to generate templates for
-    const modulesToGenerate = selectedModuleIds.length > 0
-      ? selectedModuleIds.map(id => getModuleById(id)).filter(Boolean)
-      : [getModuleById("module-5")]; // Default: Comparison Chart
+    const modulesToGenerate =
+      selectedModuleIds.length > 0
+        ? selectedModuleIds.map((id) => getModuleById(id)).filter(Boolean)
+        : [getModuleById("module-5")]; // Default: Comparison Chart
 
     const workbook = XLSX.utils.book_new();
 
     // Instructions sheet
+    const hasStandardModules = modulesToGenerate.some(
+      (mod) => mod.id !== "module-5",
+    );
+    const hasComparisonChart = modulesToGenerate.some(
+      (mod) => mod.id === "module-5",
+    );
+    const numberedModulesStr = modulesToGenerate
+      .map((mod, index) => `${index + 1}. ${mod.name}`)
+      .join("\n");
+
     const instrData = [
-      [makeCell("A+ Publisher Pro - Template Instructions", styles.docTitle), makeCell("", styles.docEmpty)],
-      [makeCell("Each sheet tab represents one A+ module. Fill in the values and import the file back into the extension.", styles.docSub), makeCell("", styles.docEmpty)],
+      [
+        makeCell("A+ Publisher Pro - Template Instructions", styles.docTitle),
+        makeCell("", styles.docEmpty),
+      ],
+      [
+        makeCell(
+          "Each sheet tab represents one A+ module. Fill in the values and import the file back into the extension.",
+          styles.docSub,
+        ),
+        makeCell("", styles.docEmpty),
+      ],
       [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
-      [makeCell("Field", styles.tblHeader), makeCell("Instructions", styles.tblHeader)],
-      [makeCell("A+ Content Title", styles.sideLabel), makeCell("Optional. Name of your A+ Content project.", styles.descText)],
-      [makeCell("A+ Draft URL", styles.sideLabel), makeCell("Paste the full Amazon A+ Content Draft URL.", styles.descText)],
-      [makeCell("Module Type", styles.sideLabel), makeCell("Auto-filled. Do NOT change this value.", styles.descText)],
-      [makeCell("Image Fields", styles.sideLabel), makeCell("Image fields are listed for reference. Use the Amazon editor to upload images manually.", styles.descText)],
-      [makeCell("Text Fields", styles.sideLabel), makeCell("Fill in text values. Respect the character limits shown in parentheses.", styles.descText)],
+      [
+        makeCell("Field", styles.tblHeader),
+        makeCell("Instructions", styles.tblHeader),
+      ],
+      [
+        makeCell("Module Type", styles.sideLabel),
+        makeCell("Auto-filled. Do NOT change this value.", styles.descText),
+      ],
+      [
+        makeCell("A+ Content Title", styles.sideLabel),
+        makeCell("Optional. Name of your A+ Content project.", styles.descText),
+      ],
+      [
+        makeCell("A+ Draft URL", styles.sideLabel),
+        makeCell(
+          "Paste the full Amazon A+ Content Draft URL.",
+          styles.descText,
+        ),
+      ],
     ];
+
+    if (hasStandardModules) {
+      instrData.push(
+        [
+          makeCell("Standard Modules", styles.tblHeader),
+          makeCell(
+            "Instructions for standard row-based layouts",
+            styles.tblHeader,
+          ),
+        ],
+        [
+          makeCell("Image Fields", styles.sideLabel),
+          makeCell(
+            "Image fields are listed for reference. Use the Amazon editor to upload images manually.",
+            styles.descText,
+          ),
+        ],
+        [
+          makeCell("Text Fields", styles.sideLabel),
+          makeCell(
+            "Fill in text values. Respect the character limits shown in parentheses.",
+            styles.descText,
+          ),
+        ],
+      );
+    }
+
+    if (hasComparisonChart) {
+      instrData.push(
+        [
+          makeCell("Comparison Chart", styles.tblHeader),
+          makeCell(
+            "Instructions for columnar Comparison Chart module",
+            styles.tblHeader,
+          ),
+        ],
+        [
+          makeCell("ASINs", styles.sideLabel),
+          makeCell(
+            "Enter the Base Product ASIN in the first column, and Competitor ASINs in subsequent columns.",
+            styles.descText,
+          ),
+        ],
+        [
+          makeCell("Metrics / Text", styles.sideLabel),
+          makeCell(
+            "Fill out the attributes for each product column (e.g. checkmarks, text).",
+            styles.descText,
+          ),
+        ],
+      );
+    }
+
+    // Add Selected Modules row at the very end
+    instrData.push(
+      [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
+      [
+        makeCell("Selected Modules", styles.sideLabel),
+        makeCell(numberedModulesStr, styles.descText),
+      ],
+    );
+
     const instrSheet = XLSX.utils.aoa_to_sheet(instrData);
     instrSheet["!cols"] = [{ wch: 25 }, { wch: 75 }];
+
+    // Set auto row heights based on newlines in the cell content
+    instrSheet["!rows"] = instrData.map((row) => {
+      let maxLines = 1;
+      row.forEach((cell) => {
+        if (cell && cell.v && typeof cell.v === "string") {
+          const lines = cell.v.split("\n").length;
+          if (lines > maxLines) {
+            maxLines = lines;
+          }
+        }
+      });
+      // Base height is ~18 for single line, then add ~14 points for each additional line
+      return { hpt: maxLines * 14 + 6 };
+    });
+
     XLSX.utils.book_append_sheet(workbook, instrSheet, "Instructions");
 
     // Generate a sheet for each selected module
@@ -547,30 +860,142 @@ document.addEventListener("DOMContentLoaded", () => {
     modulesToGenerate.forEach((mod) => {
       if (mod.id === "module-5") {
         // Special: Comparison Chart uses the original columnar layout
-        const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "1F497D" } }, ...styles.docEmpty };
+        const titleStyle = {
+          font: { bold: true, sz: 14, color: { rgb: "1F497D" } },
+          ...styles.docEmpty,
+        };
         const chartData = [
-          [makeCell("Comparison Chart", titleStyle), makeCell("", styles.docEmpty), ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty))],
-          [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty), ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty))],
-          [makeCell("Label / Attribute", styles.tblHeader), makeCell("Base Product", styles.tblHeader), makeCell("Competitor 1", styles.tblHeader), makeCell("Competitor 2", styles.tblHeader), makeCell("Competitor 3", styles.tblHeader), makeCell("Competitor 4", styles.tblHeader), makeCell("Competitor 5", styles.tblHeader)],
-          [makeCell("Module Type", styles.sideLabel), makeCell("module-5", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
-          [makeCell("A+ Content Title", styles.sideLabel), makeCell("My Premium Comparison Chart", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
-          [makeCell("A+ Draft URL", styles.sideLabel), makeCell("https://sellercentral.amazon.com/aplus/edit/...", styles.configVal), ...Array.from({ length: 5 }, () => makeCell("", styles.configVal))],
-          [makeCell("ASIN", styles.sideLabel), makeCell("B0XXXXXXXX", styles.highlightCol), makeCell("B0YYYYYYYY", styles.normalCol), makeCell("B0ZZZZZZZZ", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
-          [makeCell("Highlight Column", styles.sideLabel), makeCell("TRUE", styles.highlightCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol), makeCell("FALSE", styles.normalCol)],
-          [makeCell("Show Reviews", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
-          [makeCell("Show Prices", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
-          [makeCell("Show Add To Cart Button", styles.sideLabel), makeCell("TRUE", styles.highlightCol), ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol))],
-          [makeCell("Title", styles.sideLabel), makeCell("Your Main Product", styles.highlightCol), makeCell("Competitor A", styles.normalCol), makeCell("Competitor B", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
-          [makeCell("Customer Rating", styles.sideLabel), makeCell("4.8", styles.highlightCol), makeCell("4.2", styles.normalCol), makeCell("4.5", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
-          [makeCell("Warranty", styles.sideLabel), makeCell("2 Years", styles.highlightCol), makeCell("1 Year", styles.normalCol), makeCell("6 Months", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
-          [makeCell("Waterproof", styles.sideLabel), makeCell("Yes", styles.highlightCol), makeCell("No", styles.normalCol), makeCell("Yes", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol), makeCell("", styles.normalCol)],
+          [
+            makeCell("Comparison Chart", titleStyle),
+            makeCell("", styles.docEmpty),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty)),
+          ],
+          [
+            makeCell("", styles.docEmpty),
+            makeCell("", styles.docEmpty),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.docEmpty)),
+          ],
+          [
+            makeCell("Label / Attribute", styles.tblHeader),
+            makeCell("Base Product", styles.tblHeader),
+            makeCell("Competitor 1", styles.tblHeader),
+            makeCell("Competitor 2", styles.tblHeader),
+            makeCell("Competitor 3", styles.tblHeader),
+            makeCell("Competitor 4", styles.tblHeader),
+            makeCell("Competitor 5", styles.tblHeader),
+          ],
+          [
+            makeCell("Module Type", styles.sideLabel),
+            makeCell("module-5", styles.configVal),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+          ],
+          [
+            makeCell("A+ Content Title", styles.sideLabel),
+            makeCell("My Premium Comparison Chart", styles.configVal),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+          ],
+          [
+            makeCell("A+ Draft URL", styles.sideLabel),
+            makeCell(
+              "https://sellercentral.amazon.com/aplus/edit/...",
+              styles.configVal,
+            ),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.configVal)),
+          ],
+          [
+            makeCell("ASIN", styles.sideLabel),
+            makeCell("B0XXXXXXXX", styles.highlightCol),
+            makeCell("B0YYYYYYYY", styles.normalCol),
+            makeCell("B0ZZZZZZZZ", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+          ],
+          [
+            makeCell("Highlight Column", styles.sideLabel),
+            makeCell("TRUE", styles.highlightCol),
+            makeCell("FALSE", styles.normalCol),
+            makeCell("FALSE", styles.normalCol),
+            makeCell("FALSE", styles.normalCol),
+            makeCell("FALSE", styles.normalCol),
+            makeCell("FALSE", styles.normalCol),
+          ],
+          [
+            makeCell("Show Reviews", styles.sideLabel),
+            makeCell("TRUE", styles.highlightCol),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol)),
+          ],
+          [
+            makeCell("Show Prices", styles.sideLabel),
+            makeCell("TRUE", styles.highlightCol),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol)),
+          ],
+          [
+            makeCell("Show Add To Cart Button", styles.sideLabel),
+            makeCell("TRUE", styles.highlightCol),
+            ...Array.from({ length: 5 }, () => makeCell("", styles.normalCol)),
+          ],
+          [
+            makeCell("Title", styles.sideLabel),
+            makeCell("Your Main Product", styles.highlightCol),
+            makeCell("Competitor A", styles.normalCol),
+            makeCell("Competitor B", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+          ],
+          [
+            makeCell("Customer Rating", styles.sideLabel),
+            makeCell("4.8", styles.highlightCol),
+            makeCell("4.2", styles.normalCol),
+            makeCell("4.5", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+          ],
+          [
+            makeCell("Warranty", styles.sideLabel),
+            makeCell("2 Years", styles.highlightCol),
+            makeCell("1 Year", styles.normalCol),
+            makeCell("6 Months", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+          ],
+          [
+            makeCell("Waterproof", styles.sideLabel),
+            makeCell("Yes", styles.highlightCol),
+            makeCell("No", styles.normalCol),
+            makeCell("Yes", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+            makeCell("", styles.normalCol),
+          ],
         ];
         const ws = XLSX.utils.aoa_to_sheet(chartData);
-        ws["!cols"] = [{ wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
-        const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+        ws["!cols"] = [
+          { wch: 25 },
+          { wch: 30 },
+          { wch: 20 },
+          { wch: 20 },
+          { wch: 20 },
+          { wch: 20 },
+          { wch: 20 },
+        ];
+        const moduleIdsString = MODULE_REGISTRY.map((m) => m.id).join(",");
         ws["!dataValidation"] = [
-          { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` },
-          { sqref: "B8:G11", type: "list", allowBlank: true, formula1: '"TRUE,FALSE"' }
+          {
+            sqref: "B4:B4",
+            type: "list",
+            allowBlank: false,
+            formula1: `"${moduleIdsString}"`,
+          },
+          {
+            sqref: "B8:G11",
+            type: "list",
+            allowBlank: true,
+            formula1: '"TRUE,FALSE"',
+          },
         ];
 
         const tabName = dedupeSheetName("Comparison Chart", usedNames);
@@ -580,34 +1005,61 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = [
           [makeCell(mod.name, styles.docTitle), makeCell("", styles.docEmpty)],
           [makeCell("", styles.docEmpty), makeCell("", styles.docEmpty)],
-          [makeCell("Field", styles.tblHeader), makeCell("Value", styles.tblHeader)],
-          [makeCell("Module Type", styles.sideLabel), makeCell(mod.id, styles.configVal)],
-          [makeCell("A+ Content Title", styles.sideLabel), makeCell("", styles.configVal)],
-          [makeCell("A+ Draft URL", styles.sideLabel), makeCell("", styles.configVal)],
+          [
+            makeCell("Field", styles.tblHeader),
+            makeCell("Value", styles.tblHeader),
+          ],
+          [
+            makeCell("Module Type", styles.sideLabel),
+            makeCell(mod.id, styles.configVal),
+          ],
+          [
+            makeCell("A+ Content Title", styles.sideLabel),
+            makeCell("", styles.configVal),
+          ],
+          [
+            makeCell("A+ Draft URL", styles.sideLabel),
+            makeCell("", styles.configVal),
+          ],
         ];
 
         // Add each field from the module schema
         for (const field of mod.fields) {
-          const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+          const maxNote = field.maxLength
+            ? ` (max ${field.maxLength} chars)`
+            : "";
           if (field.repeat && field.repeat > 1) {
             for (let i = 1; i <= field.repeat; i++) {
               const label = `${field.label} ${i}${maxNote}`;
-              const placeholder = field.type === "image" ? "(upload in Amazon editor)" : "";
-              rows.push([makeCell(label, styles.sideLabel), makeCell(placeholder, styles.normalCol)]);
+              const placeholder =
+                field.type === "image" ? "(upload in Amazon editor)" : "";
+              rows.push([
+                makeCell(label, styles.sideLabel),
+                makeCell(placeholder, styles.normalCol),
+              ]);
             }
           } else {
             const label = `${field.label}${maxNote}`;
-            const placeholder = field.type === "image" ? "(upload in Amazon editor)" : "";
-            rows.push([makeCell(label, styles.sideLabel), makeCell(placeholder, styles.normalCol)]);
+            const placeholder =
+              field.type === "image" ? "(upload in Amazon editor)" : "";
+            rows.push([
+              makeCell(label, styles.sideLabel),
+              makeCell(placeholder, styles.normalCol),
+            ]);
           }
         }
 
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws["!cols"] = [{ wch: 35 }, { wch: 60 }];
 
-        const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+        const moduleIdsString = MODULE_REGISTRY.map((m) => m.id).join(",");
         ws["!dataValidation"] = [
-          { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` }
+          {
+            sqref: "B4:B4",
+            type: "list",
+            allowBlank: false,
+            formula1: `"${moduleIdsString}"`,
+          },
         ];
 
         const tabName = dedupeSheetName(mod.shortName, usedNames);
@@ -615,7 +1067,19 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    XLSX.writeFile(workbook, "APlus_Template.xlsx", { bookType: "xlsx" });
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const min = String(now.getMinutes()).padStart(2, "0");
+    const timestampStr = `${yy}-${mm}-${dd}_${hh}-${min}`;
+
+    XLSX.writeFile(
+      workbook,
+      `APlus_Template_${modulesToGenerate.length}_Modules_${timestampStr}.xlsx`,
+      { bookType: "xlsx" },
+    );
   }
 
   /** Ensures unique Excel sheet tab names (max 31 chars, no illegal chars) */
@@ -681,12 +1145,30 @@ document.addEventListener("DOMContentLoaded", () => {
         headers.push(makeCell(`Competitor ${i}`, styles.tblHeader));
       }
 
-      const docEmpty = { border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } } };
-      const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "1F497D" } }, ...docEmpty };
+      const docEmpty = {
+        border: {
+          top: { style: "none" },
+          bottom: { style: "none" },
+          left: { style: "none" },
+          right: { style: "none" },
+        },
+      };
+      const titleStyle = {
+        font: { bold: true, sz: 14, color: { rgb: "1F497D" } },
+        ...docEmpty,
+      };
 
       const rows = [
-        [makeCell("Comparison Chart", titleStyle), makeCell("", docEmpty), ...Array.from({ length: 5 }, () => makeCell("", docEmpty))],
-        [makeCell("", docEmpty), makeCell("", docEmpty), ...Array.from({ length: 5 }, () => makeCell("", docEmpty))],
+        [
+          makeCell("Comparison Chart", titleStyle),
+          makeCell("", docEmpty),
+          ...Array.from({ length: 5 }, () => makeCell("", docEmpty)),
+        ],
+        [
+          makeCell("", docEmpty),
+          makeCell("", docEmpty),
+          ...Array.from({ length: 5 }, () => makeCell("", docEmpty)),
+        ],
         headers,
         [
           makeCell("Module Type", styles.sideLabel),
@@ -705,30 +1187,45 @@ document.addEventListener("DOMContentLoaded", () => {
         ],
         [
           makeCell("ASIN", styles.sideLabel),
-          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.asins[idx] || "", getColStyle(idx))),
+          ...Array.from({ length: 6 }, (_, idx) =>
+            makeCell(chart.asins[idx] || "", getColStyle(idx)),
+          ),
         ],
         [
           makeCell("Highlight Column", styles.sideLabel),
-          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.highlightColumn[idx] ? "TRUE" : "FALSE", getColStyle(idx))),
+          ...Array.from({ length: 6 }, (_, idx) =>
+            makeCell(
+              chart.highlightColumn[idx] ? "TRUE" : "FALSE",
+              getColStyle(idx),
+            ),
+          ),
         ],
         [
           makeCell("Show Reviews", styles.sideLabel),
           makeCell(chart.showReviews ? "TRUE" : "FALSE", getColStyle(0)),
-          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+          ...Array.from({ length: 5 }, (_, idx) =>
+            makeCell("", getColStyle(idx + 1)),
+          ),
         ],
         [
           makeCell("Show Prices", styles.sideLabel),
           makeCell(chart.showPrices ? "TRUE" : "FALSE", getColStyle(0)),
-          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+          ...Array.from({ length: 5 }, (_, idx) =>
+            makeCell("", getColStyle(idx + 1)),
+          ),
         ],
         [
           makeCell("Show Add To Cart Button", styles.sideLabel),
           makeCell(chart.showAddToCart ? "TRUE" : "FALSE", getColStyle(0)),
-          ...Array.from({ length: 5 }, (_, idx) => makeCell("", getColStyle(idx + 1))),
+          ...Array.from({ length: 5 }, (_, idx) =>
+            makeCell("", getColStyle(idx + 1)),
+          ),
         ],
         [
           makeCell("Title", styles.sideLabel),
-          ...Array.from({ length: 6 }, (_, idx) => makeCell(chart.titles[idx] || "", getColStyle(idx))),
+          ...Array.from({ length: 6 }, (_, idx) =>
+            makeCell(chart.titles[idx] || "", getColStyle(idx)),
+          ),
         ],
       ];
 
@@ -737,51 +1234,102 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!attr || !attr.name) return;
           rows.push([
             makeCell(attr.name, styles.sideLabel),
-            ...Array.from({ length: 6 }, (_, idx) => makeCell(attr.values[idx] || "", getColStyle(idx))),
+            ...Array.from({ length: 6 }, (_, idx) =>
+              makeCell(attr.values[idx] || "", getColStyle(idx)),
+            ),
           ]);
         });
       }
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
       ws["!cols"] = [
-        { wch: 25 }, { wch: 30 }, { wch: 20 },
-        { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+        { wch: 25 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
       ];
       ws["!views"] = [{ showGridLines: true }];
 
-      const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+      const moduleIdsString = MODULE_REGISTRY.map((m) => m.id).join(",");
       ws["!dataValidation"] = [
-        { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` },
-        { sqref: "B8:G11", type: "list", allowBlank: true, formula1: '"TRUE,FALSE"' }
+        {
+          sqref: "B4:B4",
+          type: "list",
+          allowBlank: false,
+          formula1: `"${moduleIdsString}"`,
+        },
+        {
+          sqref: "B8:G11",
+          type: "list",
+          allowBlank: true,
+          formula1: '"TRUE,FALSE"',
+        },
       ];
 
       return ws;
     } else {
       const mod = getModuleById(moduleId);
-      const docEmpty = { border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } } };
+      const docEmpty = {
+        border: {
+          top: { style: "none" },
+          bottom: { style: "none" },
+          left: { style: "none" },
+          right: { style: "none" },
+        },
+      };
       const rows = [
-        [makeCell(mod ? mod.name : "A+ Module", styles.tblHeader), makeCell("", docEmpty)],
+        [
+          makeCell(mod ? mod.name : "A+ Module", styles.tblHeader),
+          makeCell("", docEmpty),
+        ],
         [makeCell("", docEmpty), makeCell("", docEmpty)],
-        [makeCell("Field", styles.tblHeader), makeCell("Value", styles.tblHeader)],
-        [makeCell("Module Type", styles.sideLabel), makeCell(moduleId, styles.configVal)],
-        [makeCell("A+ Content Title", styles.sideLabel), makeCell(chart.contentTitle || "", styles.configVal)],
-        [makeCell("A+ Draft URL", styles.sideLabel), makeCell(chart.draftUrl || "", styles.configVal)],
+        [
+          makeCell("Field", styles.tblHeader),
+          makeCell("Value", styles.tblHeader),
+        ],
+        [
+          makeCell("Module Type", styles.sideLabel),
+          makeCell(moduleId, styles.configVal),
+        ],
+        [
+          makeCell("A+ Content Title", styles.sideLabel),
+          makeCell(chart.contentTitle || "", styles.configVal),
+        ],
+        [
+          makeCell("A+ Draft URL", styles.sideLabel),
+          makeCell(chart.draftUrl || "", styles.configVal),
+        ],
       ];
 
       if (mod && chart.fields) {
         mod.fields.forEach((field) => {
-          const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+          const maxNote = field.maxLength
+            ? ` (max ${field.maxLength} chars)`
+            : "";
           if (field.repeat && field.repeat > 1) {
             const vals = chart.fields[field.key] || [];
             for (let i = 1; i <= field.repeat; i++) {
               const label = `${field.label} ${i}${maxNote}`;
-              const val = vals[i - 1] || (field.type === "image" ? "(upload in Amazon editor)" : "");
-              rows.push([makeCell(label, styles.sideLabel), makeCell(val, styles.normalCol)]);
+              const val =
+                vals[i - 1] ||
+                (field.type === "image" ? "(upload in Amazon editor)" : "");
+              rows.push([
+                makeCell(label, styles.sideLabel),
+                makeCell(val, styles.normalCol),
+              ]);
             }
           } else {
             const label = `${field.label}${maxNote}`;
-            const val = chart.fields[field.key] || (field.type === "image" ? "(upload in Amazon editor)" : "");
-            rows.push([makeCell(label, styles.sideLabel), makeCell(val, styles.normalCol)]);
+            const val =
+              chart.fields[field.key] ||
+              (field.type === "image" ? "(upload in Amazon editor)" : "");
+            rows.push([
+              makeCell(label, styles.sideLabel),
+              makeCell(val, styles.normalCol),
+            ]);
           }
         });
       }
@@ -790,9 +1338,14 @@ document.addEventListener("DOMContentLoaded", () => {
       ws["!cols"] = [{ wch: 35 }, { wch: 60 }];
       ws["!views"] = [{ showGridLines: true }];
 
-      const moduleIdsString = MODULE_REGISTRY.map(m => m.id).join(",");
+      const moduleIdsString = MODULE_REGISTRY.map((m) => m.id).join(",");
       ws["!dataValidation"] = [
-        { sqref: "B4:B4", type: "list", allowBlank: false, formula1: `"${moduleIdsString}"` }
+        {
+          sqref: "B4:B4",
+          type: "list",
+          allowBlank: false,
+          formula1: `"${moduleIdsString}"`,
+        },
       ];
 
       return ws;
@@ -802,21 +1355,97 @@ document.addEventListener("DOMContentLoaded", () => {
   /** Shared Instructions sheet builder */
   function buildInstructionsSheet() {
     const styles = CHART_SHEET_STYLES;
-    const noBorder = { border: { top: { style: "none" }, bottom: { style: "none" }, left: { style: "none" }, right: { style: "none" } } };
-    const descStyle = { font: { sz: 10, color: { rgb: "333333" } }, alignment: { horizontal: "left", vertical: "center", wrapText: true } };
+    const noBorder = {
+      border: {
+        top: { style: "none" },
+        bottom: { style: "none" },
+        left: { style: "none" },
+        right: { style: "none" },
+      },
+    };
+    const descStyle = {
+      font: { sz: 10, color: { rgb: "333333" } },
+      alignment: { horizontal: "left", vertical: "center", wrapText: true },
+    };
     const data = [
-      [makeCell("A+ Comparison Chart Builder - Documentation & Instructions", { font: { bold: true, sz: 14, color: { rgb: "1F497D" } }, ...noBorder }), makeCell("", noBorder)],
-      [makeCell("This sheet explains all rules, features, and settings for comparison chart automation.", { font: { italic: true, sz: 10, color: { rgb: "555555" } }, ...noBorder }), makeCell("", noBorder)],
+      [
+        makeCell("A+ Comparison Chart Builder - Documentation & Instructions", {
+          font: { bold: true, sz: 14, color: { rgb: "1F497D" } },
+          ...noBorder,
+        }),
+        makeCell("", noBorder),
+      ],
+      [
+        makeCell(
+          "This sheet explains all rules, features, and settings for comparison chart automation.",
+          {
+            font: { italic: true, sz: 10, color: { rgb: "555555" } },
+            ...noBorder,
+          },
+        ),
+        makeCell("", noBorder),
+      ],
       [makeCell("", noBorder), makeCell("", noBorder)],
-      [makeCell("Feature / Configuration", styles.tblHeader), makeCell("Instructions & Practical Guidelines", styles.tblHeader)],
-      [makeCell("A+ Content Title", styles.sideLabel), makeCell("Optional. Enter the overall title/name of your A+ Content project.", descStyle)],
-      [makeCell("A+ Draft URL", styles.sideLabel), makeCell("Paste the full Amazon A+ Content Draft URL in cell B3.", descStyle)],
-      [makeCell("ASIN", styles.sideLabel), makeCell("Strictly required. Row 4 contains the ASIN (10-character Amazon Identifier).", descStyle)],
-      [makeCell("Highlight Column", styles.sideLabel), makeCell("Set exactly one column to TRUE (usually Base Product) and others to FALSE.", descStyle)],
-      [makeCell("Toggles: Reviews, Prices, Cart", styles.sideLabel), makeCell("Set 'Show Reviews', 'Show Prices', and 'Show Add To Cart Button' to TRUE or FALSE.", descStyle)],
-      [makeCell("Title", styles.sideLabel), makeCell("Strictly required. The display names/titles of your products.", descStyle)],
-      [makeCell("Comparison Metrics", styles.sideLabel), makeCell("Rows 9+ represent comparison features. Up to 10 allowed.", descStyle)],
-      [makeCell("Checkmarks & Icons", styles.sideLabel), makeCell("Green checkmark: 'True', 'Check', '\u2714', or '\u2713'.\nEmpty circle: 'False', or 'N'.\nText values: 'Yes', 'No', 'X', or any other text.", descStyle)],
+      [
+        makeCell("Feature / Configuration", styles.tblHeader),
+        makeCell("Instructions & Practical Guidelines", styles.tblHeader),
+      ],
+      [
+        makeCell("A+ Content Title", styles.sideLabel),
+        makeCell(
+          "Optional. Enter the overall title/name of your A+ Content project.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("A+ Draft URL", styles.sideLabel),
+        makeCell(
+          "Paste the full Amazon A+ Content Draft URL in cell B3.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("ASIN", styles.sideLabel),
+        makeCell(
+          "Strictly required. Row 4 contains the ASIN (10-character Amazon Identifier).",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("Highlight Column", styles.sideLabel),
+        makeCell(
+          "Set exactly one column to TRUE (usually Base Product) and others to FALSE.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("Toggles: Reviews, Prices, Cart", styles.sideLabel),
+        makeCell(
+          "Set 'Show Reviews', 'Show Prices', and 'Show Add To Cart Button' to TRUE or FALSE.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("Title", styles.sideLabel),
+        makeCell(
+          "Strictly required. The display names/titles of your products.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("Comparison Metrics", styles.sideLabel),
+        makeCell(
+          "Rows 9+ represent comparison features. Up to 10 allowed.",
+          descStyle,
+        ),
+      ],
+      [
+        makeCell("Checkmarks & Icons", styles.sideLabel),
+        makeCell(
+          "Green checkmark: 'True', 'Check', '\u2714', or '\u2713'.\nEmpty circle: 'False', or 'N'.\nText values: 'Yes', 'No', 'X', or any other text.",
+          descStyle,
+        ),
+      ],
     ];
     const ws = XLSX.utils.aoa_to_sheet(data);
     ws["!cols"] = [{ wch: 25 }, { wch: 75 }];
@@ -827,12 +1456,24 @@ document.addEventListener("DOMContentLoaded", () => {
   /** Downloads a single chart as a standalone Excel workbook */
   function downloadChartAsExcel(chart) {
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, buildInstructionsSheet(), "Instructions");
-    const sheetLabel = chart.moduleId === "module-5"
-      ? "A+ Comparison Chart"
-      : (getModuleById(chart.moduleId)?.shortName || "A+ Module");
-    XLSX.utils.book_append_sheet(workbook, buildChartWorksheet(chart), sheetLabel);
-    const sanitizedName = (chart.name || "APlus_Chart").replace(/[^a-zA-Z0-9_\-]/g, "_");
+    XLSX.utils.book_append_sheet(
+      workbook,
+      buildInstructionsSheet(),
+      "Instructions",
+    );
+    const sheetLabel =
+      chart.moduleId === "module-5"
+        ? "A+ Comparison Chart"
+        : getModuleById(chart.moduleId)?.shortName || "A+ Module";
+    XLSX.utils.book_append_sheet(
+      workbook,
+      buildChartWorksheet(chart),
+      sheetLabel,
+    );
+    const sanitizedName = (chart.name || "APlus_Chart").replace(
+      /[^a-zA-Z0-9_\-]/g,
+      "_",
+    );
     XLSX.writeFile(workbook, `${sanitizedName}.xlsx`, { bookType: "xlsx" });
   }
 
@@ -847,14 +1488,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, buildInstructionsSheet(), "Instructions");
+    XLSX.utils.book_append_sheet(
+      workbook,
+      buildInstructionsSheet(),
+      "Instructions",
+    );
 
     // Track used sheet names to avoid duplicates (Excel requires unique tab names)
     const usedNames = new Set(["Instructions"]);
     charts.forEach((chart) => {
       // Excel tab names: max 31 chars, no special chars
       let sheetName = (chart.name || "Chart")
-        .replace(/[\\\/?*\[\]:]/g, "_")  // strip Excel-illegal chars
+        .replace(/[\\\/?*\[\]:]/g, "_") // strip Excel-illegal chars
         .slice(0, 31);
       // Deduplicate by appending a counter
       let candidate = sheetName;
@@ -864,12 +1509,18 @@ document.addEventListener("DOMContentLoaded", () => {
         candidate = sheetName.slice(0, 31 - suffix.length) + suffix;
       }
       usedNames.add(candidate);
-      XLSX.utils.book_append_sheet(workbook, buildChartWorksheet(chart), candidate);
+      XLSX.utils.book_append_sheet(
+        workbook,
+        buildChartWorksheet(chart),
+        candidate,
+      );
     });
 
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    XLSX.writeFile(workbook, `APlus_All_Charts_${ts}.xlsx`, { bookType: "xlsx" });
+    XLSX.writeFile(workbook, `APlus_All_Charts_${ts}.xlsx`, {
+      bookType: "xlsx",
+    });
   }
 
   function handleFile(file) {
@@ -914,7 +1565,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Search the first 15 rows for "Module Type" cell
     const searchLimit = Math.min(data.length, 15);
     for (let i = 0; i < searchLimit; i++) {
-      const firstCell = String(data[i] && data[i][0] || "").trim().toUpperCase();
+      const firstCell = String((data[i] && data[i][0]) || "")
+        .trim()
+        .toUpperCase();
       if (firstCell === "MODULE TYPE") {
         explicitModuleId = String(data[i][1] || "").trim();
         break;
@@ -934,7 +1587,7 @@ document.addEventListener("DOMContentLoaded", () => {
         draftUrl: "",
         previewUrl: "",
         selected: false,
-        fields: {}
+        fields: {},
       };
     }
 
@@ -946,7 +1599,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const fields = {};
 
       // Initialize default values for the fields based on schema
-      mod.fields.forEach(f => {
+      mod.fields.forEach((f) => {
         if (f.repeat && f.repeat > 1) {
           fields[f.key] = new Array(f.repeat).fill("");
         } else {
@@ -970,13 +1623,19 @@ document.addEventListener("DOMContentLoaded", () => {
           previewUrl = buildPreviewUrl(draftUrl);
           return;
         }
-        if (labelUpper === "MODULE TYPE" || labelUpper === "FIELD" || rawLabel === mod.name) {
+        if (
+          labelUpper === "MODULE TYPE" ||
+          labelUpper === "FIELD" ||
+          rawLabel === mod.name
+        ) {
           // Skip header/config rows
           return;
         }
 
         // Clean label: strip "(max ... chars)" suffix
-        const cleanLabel = rawLabel.replace(/\s*\(max\s+\d+\s+chars\)/i, "").trim();
+        const cleanLabel = rawLabel
+          .replace(/\s*\(max\s+\d+\s+chars\)/i, "")
+          .trim();
 
         // Match against module fields schema
         for (const field of mod.fields) {
@@ -1021,13 +1680,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let activeCols = [];
     const KNOWN_LABELS = new Set([
-      "A+ CONTENT TITLE", "A+ DRAFT URL", "ASIN", "HIGHLIGHT COLUMN",
-      "SHOW REVIEWS", "SHOW PRICES", "SHOW ADD TO CART BUTTON", "TITLE",
-      "MODULE TYPE", "COMPARISON CHART", "FIELD", "LABEL / ATTRIBUTE"
+      "A+ CONTENT TITLE",
+      "A+ DRAFT URL",
+      "ASIN",
+      "HIGHLIGHT COLUMN",
+      "SHOW REVIEWS",
+      "SHOW PRICES",
+      "SHOW ADD TO CART BUTTON",
+      "TITLE",
+      "MODULE TYPE",
+      "COMPARISON CHART",
+      "FIELD",
+      "LABEL / ATTRIBUTE",
     ]);
 
     data.forEach((row, idx) => {
-      const label = String(row[0] || "").trim().toUpperCase();
+      const label = String(row[0] || "")
+        .trim()
+        .toUpperCase();
 
       if (label === "ASIN") {
         activeCols = [];
@@ -1044,18 +1714,32 @@ document.addEventListener("DOMContentLoaded", () => {
         draftUrl = String(row[1] || "").trim();
         previewUrl = buildPreviewUrl(draftUrl);
       } else if (label === "HIGHLIGHT COLUMN") {
-        highlightColumn = (activeCols.length ? activeCols : [0, 1, 2, 3, 4, 5]).map(
-          (c) => String(row[c + 1] || "").trim().toUpperCase() === "TRUE"
+        highlightColumn = (
+          activeCols.length ? activeCols : [0, 1, 2, 3, 4, 5]
+        ).map(
+          (c) =>
+            String(row[c + 1] || "")
+              .trim()
+              .toUpperCase() === "TRUE",
         );
       } else if (label === "SHOW REVIEWS") {
-        showReviews = String(row[1] || "").trim().toUpperCase() === "TRUE";
+        showReviews =
+          String(row[1] || "")
+            .trim()
+            .toUpperCase() === "TRUE";
       } else if (label === "SHOW PRICES") {
-        showPrices = String(row[1] || "").trim().toUpperCase() === "TRUE";
+        showPrices =
+          String(row[1] || "")
+            .trim()
+            .toUpperCase() === "TRUE";
       } else if (label === "SHOW ADD TO CART BUTTON") {
-        showAddToCart = String(row[1] || "").trim().toUpperCase() === "TRUE";
+        showAddToCart =
+          String(row[1] || "")
+            .trim()
+            .toUpperCase() === "TRUE";
       } else if (label === "TITLE") {
         titles = (activeCols.length ? activeCols : [0, 1, 2, 3, 4, 5]).map(
-          (c) => String(row[c + 1] || "").trim()
+          (c) => String(row[c + 1] || "").trim(),
         );
       } else if (row[0] && !KNOWN_LABELS.has(label)) {
         const rowLabel = String(row[0]).trim();
@@ -1063,7 +1747,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (attributes.length < 10) {
           const cols = activeCols.length ? activeCols : [0, 1, 2, 3, 4, 5];
           const values = cols.map((c) =>
-            row[c + 1] === undefined ? "" : String(row[c + 1]).trim()
+            row[c + 1] === undefined ? "" : String(row[c + 1]).trim(),
           );
           attributes.push({ name: row[0], values });
         }
@@ -1116,7 +1800,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Show/hide the Download All button based on chart count
     const downloadAllBtn = document.getElementById("downloadAllChartsBtn");
     if (downloadAllBtn) {
-      downloadAllBtn.style.display = parsedData.length > 1 ? "inline-flex" : "none";
+      downloadAllBtn.style.display =
+        parsedData.length > 1 ? "inline-flex" : "none";
     }
 
     // Update toggleAllChartsBtn label dynamically based on selection state
@@ -1130,7 +1815,11 @@ document.addEventListener("DOMContentLoaded", () => {
     parsedData.forEach((chart, index) => {
       const hasErrors = getChartErrors(chart).length > 0;
       const hasWarnings = !chart.draftUrl;
-      const statusClass = hasErrors ? "has-errors" : (hasWarnings ? "has-warnings" : "is-valid");
+      const statusClass = hasErrors
+        ? "has-errors"
+        : hasWarnings
+          ? "has-warnings"
+          : "is-valid";
 
       const acc = document.createElement("div");
       acc.className = `chart-accordion ${index === openAccordionIndex ? "open" : ""} ${statusClass}`;
@@ -1165,10 +1854,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const badgeSpan = document.createElement("span");
       badgeSpan.className = "accordion-badge";
-      badgeSpan.textContent = hasErrors ? "❌" : (hasWarnings ? "⚠️" : "✅");
+      badgeSpan.textContent = hasErrors ? "❌" : hasWarnings ? "⚠️" : "✅";
       badgeSpan.title = hasErrors
         ? `Errors:\n${getChartErrors(chart).join("\n")}`
-        : (hasWarnings ? "Missing A+ Draft URL (A new draft will be created automatically)" : "Valid");
+        : hasWarnings
+          ? "Missing A+ Draft URL (A new draft will be created automatically)"
+          : "Valid";
 
       accHeader.append(leftDiv, badgeSpan);
 
@@ -1209,6 +1900,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const inner = document.createElement("div");
       inner.className = "accordion-body-inner";
+
+      const inlineVal = document.createElement("div");
+      inlineVal.className = "chart-inline-validation hidden";
+      inlineVal.style.marginBottom = "1rem";
+      inlineVal.style.padding = "0.75rem";
+      inlineVal.style.backgroundColor = "rgba(0,0,0,0.2)";
+      inlineVal.style.borderRadius = "var(--radius-sm)";
+      inner.appendChild(inlineVal);
 
       // 1. General Config
       const generalHeaderDiv = document.createElement("div");
@@ -1339,10 +2038,10 @@ document.addEventListener("DOMContentLoaded", () => {
             th.textContent = "Base";
           } else {
             th.style.whiteSpace = "nowrap";
-            
+
             const spanLabel = document.createElement("span");
             spanLabel.textContent = "Comp " + c + " ";
-            
+
             const delBtn = document.createElement("button");
             delBtn.className = "btn-icon";
             delBtn.textContent = "🗑";
@@ -1421,14 +2120,16 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let c = 0; c < chart.asins.length; c++) {
           const td = document.createElement("td");
           td.style.textAlign = "center";
-          
+
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.checked = !!chart.highlightColumn[c];
           checkbox.addEventListener("change", (e) => {
             chart.highlightColumn[c] = e.target.checked;
             if (e.target.checked) {
-              chart.highlightColumn = chart.highlightColumn.map((_, i) => i === c);
+              chart.highlightColumn = chart.highlightColumn.map(
+                (_, i) => i === c,
+              );
               renderPreview();
             }
             validateInputs();
@@ -1577,12 +2278,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
           mod.fields.forEach((field) => {
             if (field.type === "image") {
-              const imgRow = createFieldRow(field.label, "(upload in Amazon editor)", () => {}, "input-disabled");
+              const imgRow = createFieldRow(
+                field.label,
+                "(upload in Amazon editor)",
+                () => {},
+                "input-disabled",
+              );
               const input = imgRow.querySelector("input");
               if (input) input.disabled = true;
               inner.appendChild(imgRow);
             } else {
-              const maxNote = field.maxLength ? ` (max ${field.maxLength} chars)` : "";
+              const maxNote = field.maxLength
+                ? ` (max ${field.maxLength} chars)`
+                : "";
               const isTextarea = field.type === "textarea";
 
               if (field.repeat && field.repeat > 1) {
@@ -1594,35 +2302,45 @@ document.addEventListener("DOMContentLoaded", () => {
                   const label = `${field.label} ${i + 1}${maxNote}`;
                   const val = vals[i] || "";
                   if (isTextarea) {
-                    inner.appendChild(createTextareaRow(label, val, (newVal) => {
-                      chart.fields[field.key][i] = newVal;
-                      validateInputsDebounced();
-                    }));
+                    inner.appendChild(
+                      createTextareaRow(label, val, (newVal) => {
+                        chart.fields[field.key][i] = newVal;
+                        validateInputsDebounced();
+                      }),
+                    );
                   } else {
-                    inner.appendChild(createFieldRow(label, val, (newVal) => {
-                      chart.fields[field.key][i] = newVal;
-                      validateInputsDebounced();
-                    }));
+                    inner.appendChild(
+                      createFieldRow(label, val, (newVal) => {
+                        chart.fields[field.key][i] = newVal;
+                        validateInputsDebounced();
+                      }),
+                    );
                   }
                 }
               } else {
                 const label = `${field.label}${maxNote}`;
                 const val = chart.fields[field.key] || "";
                 if (isTextarea) {
-                  inner.appendChild(createTextareaRow(label, val, (newVal) => {
-                    chart.fields[field.key] = newVal;
-                    validateInputsDebounced();
-                  }));
+                  inner.appendChild(
+                    createTextareaRow(label, val, (newVal) => {
+                      chart.fields[field.key] = newVal;
+                      validateInputsDebounced();
+                    }),
+                  );
                 } else if (field.type === "boolean") {
-                  inner.appendChild(createToggle(label, !!val, (newVal) => {
-                    chart.fields[field.key] = newVal;
-                    validateInputsDebounced();
-                  }));
+                  inner.appendChild(
+                    createToggle(label, !!val, (newVal) => {
+                      chart.fields[field.key] = newVal;
+                      validateInputsDebounced();
+                    }),
+                  );
                 } else {
-                  inner.appendChild(createFieldRow(label, val, (newVal) => {
-                    chart.fields[field.key] = newVal;
-                    validateInputsDebounced();
-                  }));
+                  inner.appendChild(
+                    createFieldRow(label, val, (newVal) => {
+                      chart.fields[field.key] = newVal;
+                      validateInputsDebounced();
+                    }),
+                  );
                 }
               }
             }
@@ -1635,21 +2353,25 @@ document.addEventListener("DOMContentLoaded", () => {
       sandboxContainer.className = "sandbox-container";
       inner.appendChild(sandboxContainer);
 
-      SandboxRenderer.render(sandboxContainer, chart, (type, rowIdx, colIdx, newVal) => {
-        if (type === "metric" && chart.moduleId === "module-5") {
-          chart.attributes[rowIdx].values[colIdx] = newVal;
-          renderPreview();
-          validateInputsDebounced();
-        } else if (type === "field" && chart.moduleId !== "module-5") {
-          if (colIdx !== null && colIdx !== undefined) {
-            chart.fields[rowIdx][colIdx] = newVal;
-          } else {
-            chart.fields[rowIdx] = newVal;
+      SandboxRenderer.render(
+        sandboxContainer,
+        chart,
+        (type, rowIdx, colIdx, newVal) => {
+          if (type === "metric" && chart.moduleId === "module-5") {
+            chart.attributes[rowIdx].values[colIdx] = newVal;
+            renderPreview();
+            validateInputsDebounced();
+          } else if (type === "field" && chart.moduleId !== "module-5") {
+            if (colIdx !== null && colIdx !== undefined) {
+              chart.fields[rowIdx][colIdx] = newVal;
+            } else {
+              chart.fields[rowIdx] = newVal;
+            }
+            renderPreview();
+            validateInputsDebounced();
           }
-          renderPreview();
-          validateInputsDebounced();
-        }
-      });
+        },
+      );
 
       accBody.appendChild(inner);
       acc.appendChild(accBody);
@@ -1735,7 +2457,7 @@ document.addEventListener("DOMContentLoaded", () => {
     labelEl.appendChild(divSwitch);
     labelEl.appendChild(spanText);
     return labelEl;
-  }  // --- History Logic ---
+  } // --- History Logic ---
   // BOLT OPTIMIZATION: Instantiate Intl.RelativeTimeFormat once in DomContentLoaded scope to avoid GC/re-creation overhead during history rendering.
   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
@@ -2053,7 +2775,7 @@ document.addEventListener("DOMContentLoaded", () => {
             attr.values.forEach((val, cIdx) => {
               if (val && val.length > 250) {
                 errors.push(
-                  `Metric "${attr.name || 'Row ' + (rIdx + 1)}" value at position ${cIdx + 1} exceeds 250 characters (current: ${val.length}).`,
+                  `Metric "${attr.name || "Row " + (rIdx + 1)}" value at position ${cIdx + 1} exceeds 250 characters (current: ${val.length}).`,
                 );
               }
             });
@@ -2151,28 +2873,57 @@ document.addEventListener("DOMContentLoaded", () => {
           const hasWarnings = !chart.draftUrl;
 
           accordions[index].classList.toggle("has-errors", hasErrors);
-          accordions[index].classList.toggle("has-warnings", !hasErrors && hasWarnings);
-          accordions[index].classList.toggle("is-valid", !hasErrors && !hasWarnings);
+          accordions[index].classList.toggle(
+            "has-warnings",
+            !hasErrors && hasWarnings,
+          );
+          accordions[index].classList.toggle(
+            "is-valid",
+            !hasErrors && !hasWarnings,
+          );
 
           const badge = accordions[index].querySelector(".accordion-badge");
           if (badge) {
-            badge.textContent = hasErrors ? "❌" : (hasWarnings ? "⚠️" : "✅");
+            badge.textContent = hasErrors ? "❌" : hasWarnings ? "⚠️" : "✅";
             badge.title = hasErrors
               ? `Errors:\n${errorsCache[index].join("\n")}`
-              : (hasWarnings ? "Missing A+ Draft URL (A new draft will be created automatically)" : "Valid");
+              : hasWarnings
+                ? "Missing A+ Draft URL (A new draft will be created automatically)"
+                : "Valid";
+          }
+
+          const inlineVal = accordions[index].querySelector(
+            ".chart-inline-validation",
+          );
+          if (inlineVal) {
+            if (hasErrors) {
+              inlineVal.innerHTML = "";
+              const ul = document.createElement("ul");
+              ul.style.cssText =
+                "margin:0; padding-left: 1.5rem; color: #ef4444; font-size: 0.8rem;";
+              errorsCache[index].forEach((err) => {
+                const li = document.createElement("li");
+                li.style.cssText = "margin-bottom: 0.25rem;";
+                li.textContent = err; // 🛡️ Sentinel: Safe text rendering of untrusted Excel input
+                ul.appendChild(li);
+              });
+              inlineVal.appendChild(ul);
+              inlineVal.classList.remove("hidden");
+            } else if (hasWarnings) {
+              inlineVal.innerHTML = `<p style="margin:0; color: #f59e0b; font-size: 0.8rem;">⚠️ Missing A+ Draft URL (A new draft will be created automatically)</p>`;
+              inlineVal.classList.remove("hidden");
+            } else {
+              inlineVal.innerHTML = "";
+              inlineVal.classList.add("hidden");
+            }
           }
         }
       });
     }
 
-    const hasVisibleErrors = validationList.children.length > 0;
-    if (hasVisibleErrors || !isValid) {
-      if (parsedData && parsedData.length > 0) {
-        validationCard.classList.remove("hidden");
-      }
-    } else {
-      validationCard.classList.add("hidden");
-    }
+    // Since we're using inline validation, we no longer need the global validation card.
+    // Ensure it remains hidden to avoid clutter.
+    validationCard.classList.add("hidden");
 
     startBtn.disabled = !isValid;
   }
@@ -2207,14 +2958,14 @@ document.addEventListener("DOMContentLoaded", () => {
     openPortalBtn.addEventListener("click", () => {
       const portal = document.getElementById("portalSelect").value;
       const domain = document.getElementById("domainSelect").value;
-      
+
       let url = "";
       if (portal === "seller") {
         url = `https://sellercentral.amazon.${domain}/enhanced-content/content-manager`;
       } else {
         url = `https://vendorcentral.amazon.${domain}/hz/vendor/members/aplus/content-manager`;
       }
-      
+
       if (chrome && chrome.tabs) {
         chrome.tabs.create({ url });
       } else {
@@ -2250,10 +3001,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     chrome.runtime.sendMessage({
       type: "START_AUTOMATION",
-      data: { 
+      data: {
         charts: enrichedCharts,
         portal: portal,
-        domain: domain
+        domain: domain,
       },
     });
   });
@@ -2270,6 +3021,59 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  if (exportLogsBtn) {
+    exportLogsBtn.addEventListener("click", () => {
+      const logList = document.getElementById("logList");
+      if (!logList) return;
+
+      const logItems = logList.querySelectorAll("li");
+      if (logItems.length === 0) {
+        alert("No logs available to export.");
+        return;
+      }
+
+      const iconToType = {
+        "❌": "Error",
+        "✅": "Success",
+        "🧩": "Module",
+        "⏳": "Waiting",
+        "⚡": "System",
+        ℹ️: "Info",
+      };
+
+      const escapeCSV = (str) => `"${String(str).replace(/"/g, '""')}"`;
+
+      const csvRows = ["Timestamp,Type,Message"];
+
+      logItems.forEach((li) => {
+        const spans = li.querySelectorAll("span");
+        if (spans.length === 3) {
+          const time = spans[0].textContent;
+          const icon = spans[1].textContent;
+          const msg = spans[2].textContent;
+          const type = iconToType[icon] || "Unknown";
+          csvRows.push(
+            `${escapeCSV(time)},${escapeCSV(type)},${escapeCSV(msg)}`,
+          );
+        } else {
+          // Fallback if structure changes
+          csvRows.push(`"",${escapeCSV("Info")},${escapeCSV(li.textContent)}`);
+        }
+      });
+
+      const csvString = csvRows.join("\r\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `aplus_publisher_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }
+
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === "AUTOMATION_STATUS") {
       statusText.textContent = message.status;
@@ -2278,14 +3082,67 @@ document.addEventListener("DOMContentLoaded", () => {
       const logList = document.getElementById("logList");
       if (logList) {
         const li = document.createElement("li");
-        li.style.marginBottom = "4px";
         const time = new Date().toLocaleTimeString([], {
           hour12: false,
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
         });
-        li.textContent = `[${time}] ${message.status}`;
+
+        li.style.marginBottom = "8px";
+        li.style.padding = "8px 10px";
+        li.style.borderRadius = "var(--radius-sm)";
+        li.style.fontSize = "0.75rem";
+        li.style.display = "flex";
+        li.style.gap = "8px";
+        li.style.alignItems = "flex-start";
+        li.style.borderLeft = "3px solid transparent";
+
+        let icon = "ℹ️";
+        let bgColor = "var(--highlight-bg)";
+        let borderColor = "var(--primary)";
+
+        const textLower = message.status.toLowerCase();
+        if (textLower.includes("error") || textLower.includes("failed")) {
+          icon = "❌";
+          bgColor = "var(--error-soft)";
+          borderColor = "var(--error)";
+        } else if (
+          textLower.includes("success") ||
+          textLower.includes("completed") ||
+          textLower.includes("all charts processed")
+        ) {
+          icon = "✅";
+          bgColor = "var(--success-soft)";
+          borderColor = "var(--success)";
+        } else if (
+          textLower.includes("module") ||
+          textLower.includes("processing block")
+        ) {
+          icon = "🧩";
+          borderColor = "var(--warning)";
+        } else if (
+          textLower.includes("waiting") ||
+          textLower.includes("navigating")
+        ) {
+          icon = "⏳";
+          borderColor = "var(--text-muted)";
+        } else if (textLower.includes("injecting")) {
+          icon = "⚡";
+        }
+
+        li.style.backgroundColor = bgColor;
+        li.style.borderLeftColor = borderColor;
+
+        li.innerHTML = `
+          <span style="opacity: 0.6; font-family: monospace; white-space: nowrap; margin-top: 1px;"></span>
+          <span style="font-size: 12px; line-height: 1.2;"></span>
+          <span style="flex: 1; color: var(--text-main); font-weight: 500; line-height: 1.4; word-break: break-word;"></span>
+        `;
+        // 🛡️ Sentinel: Prevent XSS from untrusted status strings via innerHTML
+        li.children[0].textContent = time;
+        li.children[1].textContent = icon;
+        li.children[2].textContent = message.status;
         logList.appendChild(li);
 
         // auto scroll to bottom
@@ -2333,13 +3190,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Sync automatically created draft URLs to in-memory parsedData and update accordion UI inputs
       processed.forEach((procChart) => {
-        const matchingIndex = parsedData.findIndex(c => c.name === procChart.name);
+        const matchingIndex = parsedData.findIndex(
+          (c) => c.name === procChart.name,
+        );
         if (matchingIndex !== -1) {
           const matchingChart = parsedData[matchingIndex];
           matchingChart.draftUrl = procChart.draftUrl;
           matchingChart.previewUrl = procChart.previewUrl;
 
-          const accordions = previewContainer.querySelectorAll(".chart-accordion");
+          const accordions =
+            previewContainer.querySelectorAll(".chart-accordion");
           if (accordions[matchingIndex]) {
             const acc = accordions[matchingIndex];
             const urlInput = acc.querySelector(".input-url");
@@ -2384,7 +3244,9 @@ document.addEventListener("DOMContentLoaded", () => {
         resultsList.textContent = "";
 
         // Check if any processed chart has a limit error
-        const limitReachedCharts = processed.filter(c => c.error && c.error.includes("Limit reached: Max 5 modules"));
+        const limitReachedCharts = processed.filter(
+          (c) => c.error && c.error.includes("Limit reached: Max 5 modules"),
+        );
         if (limitReachedCharts.length > 0) {
           const banner = document.createElement("div");
           banner.style.background = "#fff3cd";
@@ -2503,7 +3365,9 @@ document.addEventListener("DOMContentLoaded", () => {
             );
           } else {
             // Fallback: open each URL in a new tab
-            validUrls.forEach((url) => chrome.tabs.create({ url, active: false }));
+            validUrls.forEach((url) =>
+              chrome.tabs.create({ url, active: false }),
+            );
           }
         };
       }
@@ -2550,7 +3414,9 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAIGenerator(
     (newCharts) => {
       if (parsedData && parsedData.length > 0) {
-        const append = confirm(`You already have ${parsedData.length} chart(s) in your preview. Do you want to APPEND the newly generated chart(s) to the existing list? (Click Cancel to REPLACE them)`);
+        const append = confirm(
+          `You already have ${parsedData.length} chart(s) in your preview. Do you want to APPEND the newly generated chart(s) to the existing list? (Click Cancel to REPLACE them)`,
+        );
         if (append) {
           parsedData.push(...newCharts);
         } else {

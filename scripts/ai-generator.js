@@ -44,18 +44,28 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
   function updateTokenMetrics(usage) {
     if (!usage) return;
     chrome.storage.local.get(["aiTokenMetrics"], (result) => {
-      let metrics = result.aiTokenMetrics || { lastInput: 0, lastOutput: 0, overallInput: 0, overallOutput: 0 };
-      
+      let metrics = result.aiTokenMetrics || {
+        lastInput: 0,
+        lastOutput: 0,
+        overallInput: 0,
+        overallOutput: 0,
+      };
+
       metrics.lastInput = usage.input || 0;
       metrics.lastOutput = usage.output || 0;
       metrics.overallInput += usage.input || 0;
       metrics.overallOutput += usage.output || 0;
 
       chrome.storage.local.set({ aiTokenMetrics: metrics }, () => {
-        if (tokenLastInput) tokenLastInput.textContent = metrics.lastInput.toLocaleString();
-        if (tokenLastOutput) tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
-        if (tokenOverallInput) tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
-        if (tokenOverallOutput) tokenOverallOutput.textContent = metrics.overallOutput.toLocaleString();
+        if (tokenLastInput)
+          tokenLastInput.textContent = metrics.lastInput.toLocaleString();
+        if (tokenLastOutput)
+          tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
+        if (tokenOverallInput)
+          tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
+        if (tokenOverallOutput)
+          tokenOverallOutput.textContent =
+            metrics.overallOutput.toLocaleString();
       });
     });
   }
@@ -162,9 +172,16 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
 
       // Load Advanced Configs
       if (settings.advanced) {
-        if (aiMaxTokens) aiMaxTokens.value = settings.advanced.maxTokens || 4096;
-        if (aiTemperature) aiTemperature.value = settings.advanced.temperature !== undefined ? settings.advanced.temperature : 0.1;
-        if (aiTopP) aiTopP.value = settings.advanced.topP !== undefined ? settings.advanced.topP : 1.0;
+        if (aiMaxTokens)
+          aiMaxTokens.value = settings.advanced.maxTokens || 4096;
+        if (aiTemperature)
+          aiTemperature.value =
+            settings.advanced.temperature !== undefined
+              ? settings.advanced.temperature
+              : 0.1;
+        if (aiTopP)
+          aiTopP.value =
+            settings.advanced.topP !== undefined ? settings.advanced.topP : 1.0;
         if (aiTopK) aiTopK.value = settings.advanced.topK || 40;
       } else {
         if (aiMaxTokens) aiMaxTokens.value = 4096;
@@ -179,12 +196,19 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
     // Load Token Metrics
     chrome.storage.local.get(["aiTokenMetrics"], (result) => {
       const metrics = result.aiTokenMetrics || {
-        lastInput: 0, lastOutput: 0, overallInput: 0, overallOutput: 0
+        lastInput: 0,
+        lastOutput: 0,
+        overallInput: 0,
+        overallOutput: 0,
       };
-      if (tokenLastInput) tokenLastInput.textContent = metrics.lastInput.toLocaleString();
-      if (tokenLastOutput) tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
-      if (tokenOverallInput) tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
-      if (tokenOverallOutput) tokenOverallOutput.textContent = metrics.overallOutput.toLocaleString();
+      if (tokenLastInput)
+        tokenLastInput.textContent = metrics.lastInput.toLocaleString();
+      if (tokenLastOutput)
+        tokenLastOutput.textContent = metrics.lastOutput.toLocaleString();
+      if (tokenOverallInput)
+        tokenOverallInput.textContent = metrics.overallInput.toLocaleString();
+      if (tokenOverallOutput)
+        tokenOverallOutput.textContent = metrics.overallOutput.toLocaleString();
     });
 
     saveBtn.addEventListener("click", () => {
@@ -213,10 +237,16 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
         },
         advanced: {
           maxTokens: parseInt(aiMaxTokens.value) || 4096,
-          temperature: parseFloat(aiTemperature.value) !== undefined ? parseFloat(aiTemperature.value) : 0.1,
-          topP: parseFloat(aiTopP.value) !== undefined ? parseFloat(aiTopP.value) : 1.0,
-          topK: parseInt(aiTopK.value) || 40
-        }
+          temperature:
+            parseFloat(aiTemperature.value) !== undefined
+              ? parseFloat(aiTemperature.value)
+              : 0.1,
+          topP:
+            parseFloat(aiTopP.value) !== undefined
+              ? parseFloat(aiTopP.value)
+              : 1.0,
+          topK: parseInt(aiTopK.value) || 40,
+        },
       };
       chrome.storage.local.set({ aiSettings: settings }, () => {
         const originalText = saveBtn.textContent;
@@ -1173,10 +1203,8 @@ export function setupAIGenerator(setParsedData, renderPreview, validateInputs) {
           progressText.textContent =
             "Step 2: Analyzing product groupings via AI...";
 
-        const { data: opportunities, usage } = await AIProvider.identifyOpportunities(
-          opportunitiesData,
-          settings,
-        );
+        const { data: opportunities, usage } =
+          await AIProvider.identifyOpportunities(opportunitiesData, settings);
         updateTokenMetrics(usage);
 
         console.log("Identified opportunities:", opportunities);

@@ -44,7 +44,9 @@ export const HistoryManager = {
       ...entry,
     };
     all.unshift(saved);
-    await chrome.storage.local.set({ [HISTORY_KEY]: all.slice(0, MAX_ENTRIES) });
+    await chrome.storage.local.set({
+      [HISTORY_KEY]: all.slice(0, MAX_ENTRIES),
+    });
     return saved;
   },
 
