@@ -1,66 +1,138 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Privacy Policy - A-Plus Publisher</title>
-    <link rel="icon" type="image/png" href="icons/icon16.png">
+    <link rel="icon" type="image/png" href="icons/icon16.png" />
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        h1, h2 {
-            color: #1a73e8;
-        }
-        .container {
-            background: #f8f9fa;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .last-updated {
-            color: #666;
-            font-style: italic;
-            margin-bottom: 2rem;
-        }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      h1 {
+        color: #1a73e8;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 0.5rem;
+      }
+      h2 {
+        color: #1a73e8;
+        margin-top: 1.5rem;
+      }
+      h3 {
+        color: #444;
+      }
+      .container {
+        background: #f8f9fa;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      }
+      .last-updated {
+        color: #666;
+        font-style: italic;
+        margin-bottom: 2rem;
+      }
+      .highlight {
+        background-color: #e8f0fe;
+        padding: 1rem;
+        border-left: 4px solid #1a73e8;
+        border-radius: 4px;
+        margin: 1rem 0;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Privacy Policy for A-Plus Publisher</h1>
-        <p class="last-updated">Last Updated: May 20, 2026</p>
+      <h1>Privacy Policy for A-Plus Publisher</h1>
+      <p class="last-updated">Last Updated: June 3, 2026</p>
 
-        <h2>1. Introduction</h2>
-        <p>A-Plus Publisher: Comparison Chart Pro ("we", "our", or "the extension") is committed to protecting your privacy. This Privacy Policy explains our practices regarding the collection, use, and disclosure of information when you use our Chrome Extension.</p>
+      <h2>1. Introduction</h2>
+      <p>
+        A-Plus Publisher: Amazon A+ Content & AI Generator ("we", "our", or "the extension")
+        is committed to protecting your privacy. This Privacy Policy comprehensively discloses
+        our practices regarding the collection, handling, storage, and sharing of
+        information when you use our Chrome Extension.
+      </p>
 
-        <h2>2. Data Collection and Usage</h2>
-        <p>The A-Plus Publisher extension is designed with a privacy-first approach. <strong>We do not collect, transmit, or store your personal data on any external servers.</strong></p>
-        
-        <h3>Local Data Processing</h3>
-        <p>All data processing, including reading Excel files and generating comparison charts for Amazon, happens locally on your computer within your browser. The extension uses Chrome's local storage capabilities to maintain a queue and history of your processed charts, ensuring that your data never leaves your device.</p>
+      <h2>2. User Data Collection</h2>
+      <p>
+        We are committed to data minimization and only process data necessary for the extension to function.
+      </p>
+      <ul>
+        <li><strong>Local Processing:</strong> The extension processes Excel spreadsheets, Amazon product data (like ASINs and titles), and charting queue information entirely locally within your browser.</li>
+        <li><strong>API Configurations:</strong> If you choose to use our opt-in AI features, you may provide API keys for third-party services (e.g., OpenAI, Anthropic, or Google Gemini). We do not collect these keys; they are used directly by the extension.</li>
+        <li><strong>Personal Information:</strong> We do not collect, transmit, or store personally identifiable information (PII) such as your name, email, or physical address.</li>
+      </ul>
 
-        <h2>3. Permissions Explained</h2>
-        <p>To function correctly, the extension requires the following permissions:</p>
-        <ul>
-            <li><strong>storage & unlimitedStorage:</strong> Used strictly to save your current charting queues and historical data locally on your device.</li>
-            <li><strong>sidePanel:</strong> Allows the extension to display its user interface alongside your web browsing experience.</li>
-            <li><strong>scripting:</strong> Necessary to inject the automation scripts into Amazon Seller/Vendor Central pages to automatically fill out comparison charts on your behalf.</li>
-            <li><strong>Host Permissions:</strong> Access to Amazon domains (e.g., amazon.com, amazon.co.uk) is required to automate the data entry on those specific sites.</li>
-        </ul>
+      <h2>3. User Data Handling and Usage</h2>
+      <p>
+        The data processed by the extension is strictly used for automating the creation of Amazon A+ Content modules on your behalf.
+      </p>
+      <ul>
+        <li><strong>Automation:</strong> Product details and configurations you provide are used to programmatically fill out forms on Amazon Seller Central or Vendor Central via browser automation scripts.</li>
+        <li><strong>AI Generation:</strong> If enabled, your product data and configuration prompts are formatted into requests to generate text or structure comparison charts.</li>
+      </ul>
+      <div class="highlight">
+        <strong>Important:</strong> Your Amazon credentials and session data are handled natively by your browser's secure environment. The extension does not access, read, or transmit your passwords or session cookies to us or any third parties.
+      </div>
 
-        <h2>4. Third-Party Services</h2>
-        <p>We do not use any third-party tracking, analytics, or external APIs that collect your data. Your Amazon credentials and session data are handled natively by your browser and are never accessed or transmitted by our extension.</p>
+      <h2>4. User Data Storage</h2>
+      <p>
+        <strong>All data storage is strictly local.</strong> We do not operate any external servers or databases to store your data.
+      </p>
+      <ul>
+        <li><strong>Chrome Local Storage:</strong> The extension utilizes Chrome's built-in local storage to save your application state, queued charts, historical uploads, and user preferences (including your provided API keys).</li>
+        <li><strong>Retention:</strong> This data remains on your device and is retained only as long as the extension is installed. You can clear this data at any time by uninstalling the extension or clearing your browser's extension data.</li>
+      </ul>
 
-        <h2>5. Changes to This Policy</h2>
-        <p>We may update our Privacy Policy from time to time. Any changes will be reflected on this page with an updated "Last Updated" date. We encourage you to review this Privacy Policy periodically for any changes.</p>
+      <h2>5. User Data Sharing and Third Parties</h2>
+      <p>
+        We <strong>do not sell, rent, or share</strong> your data with any data brokers, advertisers, analytics providers, or other third parties for marketing purposes.
+      </p>
+      <p>
+        However, the extension may share specific data with third parties <strong>only</strong> under the following user-initiated circumstances:
+      </p>
+      <ul>
+        <li><strong>Amazon Services:</strong> By design, the extension interacts with Amazon (e.g., <code>amazon.com</code>, <code>amazon.co.uk</code>) to submit your A+ Content drafts. Data is sent directly from your browser to Amazon's servers.</li>
+        <li><strong>Opt-In AI Providers (OpenAI, Anthropic, Google Gemini):</strong> If you actively configure and use the AI generation or translation features, relevant product data (such as ASINs, titles, and your prompt context) is transmitted directly from your browser to the respective API of the service you configured. This data is subject to the privacy policies of those respective third-party providers. We do not intermediate or log these requests.</li>
+      </ul>
 
-        <h2>6. Contact Us</h2>
-        <p>If you have any questions or suggestions about our Privacy Policy, please contact the developer through the Chrome Web Store support channel.</p>
+      <h2>6. Permissions Explained</h2>
+      <p>
+        To function correctly, the extension requires the following Chrome permissions:
+      </p>
+      <ul>
+        <li>
+          <strong>storage & unlimitedStorage:</strong> Used to locally save your charting queues, history, and user settings on your device without size constraints.
+        </li>
+        <li>
+          <strong>sidePanel:</strong> Allows the extension to display its user interface alongside your web browsing experience.
+        </li>
+        <li>
+          <strong>scripting:</strong> Necessary to inject the automation scripts into Amazon Seller/Vendor Central pages to automatically fill out A+ Content modules on your behalf.
+        </li>
+        <li>
+          <strong>webRequest:</strong> Used strictly as an internal monitoring tool to observe network request completion states (e.g., waiting for Amazon to finish saving a draft before proceeding). We do not intercept, read, or store the contents of these network requests.
+        </li>
+        <li>
+          <strong>Host Permissions:</strong> Access to Amazon domains is required to automate data entry on those specific sites.
+        </li>
+      </ul>
+
+      <h2>7. Changes to This Policy</h2>
+      <p>
+        We may update our Privacy Policy from time to time to reflect changes in our practices or regulatory requirements. Any changes will be reflected on this page with an updated "Last Updated" date.
+      </p>
+
+      <h2>8. Contact Us</h2>
+      <p>
+        If you have any questions or concerns about this Privacy Policy or our data practices, please contact the developer through the Chrome Web Store support channel.
+      </p>
     </div>
-</body>
+  </body>
 </html>
